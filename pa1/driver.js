@@ -112,14 +112,12 @@ function initVertexBuffers(gl) {
   gl.bufferData(gl.ARRAY_BUFFER, lineVert, gl.STATIC_DRAW);
 
   b_Position = gl.getAttribLocation(gl.program,'b_Position');
-  console.log("THIS IS THE B YO!?...: "+b_Position)
   gl.vertexAttribPointer(b_Position, 3, gl.FLOAT, false, FSIZE * 3, 0);
 
   gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, cVert, gl.STATIC_DRAW);
 
   a_Position = gl.getAttribLocation(gl.program, 'a_Position');
-    console.log("THIS IS THE A YO!?...: "+a_Position)
   if(a_Position < 0) {
     console.log('Failed to get the storage location of a_Position');
     return -1;
@@ -132,7 +130,6 @@ function initVertexBuffers(gl) {
   gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
 
   a_Color = gl.getAttribLocation(gl.program, 'a_Color');
-  console.log(a_Color);
   if(a_Color < 0) {
     console.log('Failed to get the storage location of a_Color');
     return -1;
@@ -146,11 +143,31 @@ function initVertexBuffers(gl) {
 
   return indices.length;
 }
-
+//duplicate the circle verticies
+function duplicateVerts(rotMatrix,point){
+    var pVec=new Vector3([0,0,radius]);
+    cVert[numOfVertsC]=point.x;
+    cVert[numOfVertsC+1]=point.y;
+    cVert[numOfVertsC+2]=radius;
+    numOfVertsC+=3;
+    var num=0;
+    var amountOfV=numOfVertsC;
+    for (var i = 0; i <= 10; i++) {
+      pVec=rotMatrix.multiplyVector3(pVec);
+      num=amountOfV+i*3;
+      cVert[num]=point.x+pVec.elements[0];
+      cVert[num+1]=point.y+pVec.elements[1];
+      cVert[num+2]=pVec.elements[2];
+      numOfVertsC+=3;
+    }
+}
 //get a start and an end point then generate based on them
 function drawCircle(gl){
   //stores the data for the first and second point of the cylynders base
   if(!debug){
+    if(numOfCyl>0){
+      //duplicate the last circle twice
+    }
     //gets the initial points from the lineVerts that arnt printed to the screen
     var frontPoint={
       x:lineVert[numOfVerts-9],
@@ -187,90 +204,101 @@ function drawCircle(gl){
       cVert[num+2]=pVec.elements[2];
       numOfVertsC+=3;
     }
-    /*
-    var index=numOfVertsC/3 - 12;
-    var p=numOfIndex;
-    for(i=0;i<22;i+=2){
-      indices[i+p]=index;
-      indices[p+i+1]=index+1;
-      index++;
-      numOfIndex+=2;
+    if(numOfVertsC>700000000){
+        duplicateVerts(rotMatrix,frontPoint);
+        duplicateVerts(rotMatrix,frontPoint);
+        duplicateVerts(rotMatrix,frontPoint);
+    }else{
+        duplicateVerts(rotMatrix,frontPoint);
     }
 
-    //make a triangle
-    //index
-    //index+12
-    //index+11
-    //?
-    //num-22 so 11
-    numOfIndex+=2;
-    indices[numOfIndex-2]=index;
-    indices[numOfIndex-1]=numOfVertsC/3-12;
-    
-    if(numOfCyl>0){
-      var index=(numOfVertsC/3)-24;
-      for (var i = 0; i < 24; i+=2) {
-        indices[numOfIndex+i]=index;
-        indices[numOfIndex+i+1]=12+index;
-        index++;
-      }
-      numOfIndex+=24;
-    }
-    */
     //-------------------------
     if(numOfCyl>0){
-      var index=numOfVertsC/3 - 24;
-
-      var p=numOfIndex;
+      var index = numOfVertsC/3 - 48;
+      var p = numOfIndex;
+      var flipFlop=false;
       for(i=0;i<66;i+=6){
-
-        indices[i+p]=index;
-        indices[i+p+1]=index+13;
-        indices[i+p+2]=index+12;
-        normalCalculation(index);
-        indices[i+p+3]=index;
-        indices[i+p+4]=index+1;
-        indices[i+p+5]=index+13;
-
+        if(!flipFlop){
+          //triangle 1
+          indices[i+p] =   index;
+          indices[i+p+1] = index + 24 + 1;
+          indices[i+p+2] = index + 24;
+          //calculate the normal
+          normalCalculation(index,true);
+          //triangle 2
+          indices[i+p+3] = index;
+          indices[i+p+4] = index + 1;
+          indices[i+p+5] = index + 24 + 1;
+        }else{
+          //triangle 1
+          indices[i+p] =   index + 12;
+          indices[i+p+1] = index + 24 + 1 + 12;
+          indices[i+p+2] = index + 24 + 12;
+          //calculate the normal
+          normalCalculation(index, false);
+          //triangle 2
+          indices[i+p+3] = index + 12;
+          indices[i+p+4] = index + 1 + 12;
+          indices[i+p+5] = index + 13 + 12;
+        }
+        if(flipFlop){
+          flipFlop =false;
+        }else{
+          flipFlop = true;
+        }
         index++;
         numOfIndex+=6;
         //then do it in reverse
       }
-        numOfNormals+=33;
+      numOfNormals+=33;
+  
+    //connect the last one
+    indices[i+p] =   index+12;
+    indices[i+p+1] = numOfVertsC/3 - 12;
+    indices[i+p+2] = index+36;
 
-      //connect the last one
-        indices[i+p]=index;
-        indices[i+p+1]=numOfVertsC/3 - 12;
-        indices[i+p+2]=index+12;
+    var normal=new Vector3();
+    var vec1=new Vector3();
+    var vec2=new Vector3();
+    console.log("FOR UR HONOR");
+    vec1.elements[0]=cVert[numOfVertsC/3-12]-cVert[(index+12)*3];
+    vec1.elements[1]=cVert[(numOfVertsC/3-12)+1]-cVert[((index+12)*3)+1];
+    vec1.elements[2]=cVert[(numOfVertsC/3-12)+2]-cVert[((index+12)*3)+2];
+    console.log("tasty");
+    console.log(numOfVertsC/3-12);
+    console.log((index+12)*3);
+    console.log((index+36)*3);
+    //do vec2
+    vec2.elements[0]=cVert[(index+36)*3]-cVert[(numOfVertsC/3-12)];
+    vec2.elements[1]=cVert[((index+36)*3)+1]-cVert[numOfVertsC/3-12+1];
+    vec2.elements[2]=cVert[((index+36)*3)+2]-cVert[numOfVertsC/3-12+2];
+    //do the cross product to make the normal of the first triangle
+    normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
+    normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
+    normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
+    //store it in the normals array
+    normals[(index+12)*3]=normal.elements[0];
+    normals[(index+12)*3+1]=normal.elements[1];
+    normals[(index+12)*3+2]=normal.elements[2];
+    //duplicate the normal for the same face
+    normals[(index+36)*3]=normal.elements[0];
+    normals[(index+36)*3+1]=normal.elements[1];
+    normals[(index+36)*3+2]=normal.elements[2];
 
-        var normal=new Vector3();
-        var vec1=new Vector3();
-        var vec2=new Vector3();
-        //subtract the elements of the the 3 verticies at index and index+13
-        vec1.elements[0]=cVert[numOfVertsC-36]-cVert[(index)*3];
-        vec1.elements[1]=cVert[(numOfVertsC-36)+1]-cVert[((index)*3)+1];
-        vec1.elements[2]=cVert[(numOfVertsC-36)+2]-cVert[((index)*3)+2];
-        //do vec2
-        vec2.elements[0]=cVert[(index+12)*3]-cVert[(numOfVertsC-36)];
-        vec2.elements[1]=cVert[((index+12)*3)+1]-cVert[numOfVertsC-36+1];
-        vec2.elements[2]=cVert[((index+12)*3)+2]-cVert[numOfVertsC-36+2];       
-         //do the cross product to make the normal of the first triangle
-        normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
-        normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
-        normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
-        //store it in the normals array
-        normals[(index)*3]=normal.elements[0];
-        normals[(index)*3+1]=normal.elements[1];
-        normals[(index)*3+2]=normal.elements[2];
-        //duplicate the normal for the same face
-        normals[(index+12)*3]=normal.elements[0];
-        normals[(index+12)*3+1]=normal.elements[1];
-        normals[(index+12)*3+2]=normal.elements[2];
+    normals[numOfVertsC-36-36-36]=normal.elements[0];
+    normals[numOfVertsC-36-36-36]=normal.elements[1];
+    normals[numOfVertsC-36-36-36]=normal.elements[2];
+    //duplicate the normal for the same face
+    normals[numOfVertsC-36]=normal.elements[0];
+    normals[numOfVertsC-36]=normal.elements[1];
+    normals[numOfVertsC-36]=normal.elements[2];
 
-        indices[i+p+3]=index;
-        indices[i+p+4]=numOfVertsC/3 - 24;
-        indices[i+p+5]=numOfVertsC/3 - 12;
-        numOfIndex+=6;
+    //subtract the elements of the the 3 verticies at index and index+13
+    indices[i+p+3] = index+12;
+    indices[i+p+4] = numOfVertsC/3 - 36;//48-48=0+12=12->0
+    indices[i+p+5] = numOfVertsC/3 - 12;//24
+
+    numOfIndex+=6;
     }
     //-------------------------
 
@@ -290,117 +318,111 @@ function drawCircle(gl){
       cVert[num+2] = pVec.elements[2];
       numOfVertsC+=3;
     }
+    duplicateVerts(rotMatrix,backPoint);
+    //duplicateVerts(rotMatrix,backPoint);
+    //duplicateVerts(rotMatrix,backPoint);
     //-------------------------
-    var index = numOfVertsC/3 - 24;
+    var index = numOfVertsC/3 - 48;
+    console.log("GIMME MY INDEX: "+index);
     var p = numOfIndex;
+    var flipFlop=false;
     for(i=0;i<66;i+=6){
-      //triangle 1
-      indices[i+p] =   index;
-      indices[i+p+1] = index+13;
-      indices[i+p+2] = index+12;
-      //calculate the normal
-      normalCalculation(index);
-      //triangle 2
-      indices[i+p+3] = index;
-      indices[i+p+4] = index+1;
-      indices[i+p+5] = index+13;
+      if(!flipFlop){
+        //triangle 1
+        indices[i+p] =   index;
+        indices[i+p+1] = index + 24 + 1;
+        indices[i+p+2] = index + 24;
+        //calculate the normal
+        normalCalculation(index,true);
+        //triangle 2
+        indices[i+p+3] = index;
+        indices[i+p+4] = index + 1;
+        indices[i+p+5] = index + 24 + 1;
+      }else{
+        //triangle 1
+        indices[i+p] =   index + 12;
+        indices[i+p+1] = index + 24 + 1 + 12;
+        indices[i+p+2] = index + 24 + 12;
+        //calculate the normal
+        normalCalculation(index, false);
+        //triangle 2
+        indices[i+p+3] = index + 12;
+        indices[i+p+4] = index + 1 + 12;
+        indices[i+p+5] = index + 24 + 1 + 12;
+      }
+      if(flipFlop){
+        flipFlop =false;
+      }else{
+        flipFlop = true;
+      }
       index++;
       numOfIndex+=6;
       //then do it in reverse
     }
-
+    console.log("FLIPFLOP: "+flipFlop);
     //find the normal for the last part of the cy;inder
     //----------------------------------------------
     //TOTO THIS PLZ
     //----------------------------------------------
-    console.log(numOfNormals/3);
     //connect the last one
-    indices[i+p] =   index;
+    indices[i+p] =   index+12;
     indices[i+p+1] = numOfVertsC/3 - 12;
-    indices[i+p+2] = index+12;
-
+    indices[i+p+2] = index+36;
     var normal=new Vector3();
     var vec1=new Vector3();
     var vec2=new Vector3();
-    //subtract the elements of the the 3 verticies at index and index+13
-    vec1.elements[0]=cVert[numOfVertsC-36]-cVert[(index)*3];
-    vec1.elements[1]=cVert[(numOfVertsC-36)+1]-cVert[((index)*3)+1];
-    vec1.elements[2]=cVert[(numOfVertsC-36)+2]-cVert[((index)*3)+2];
+  
+    vec1.elements[0]=cVert[numOfVertsC/3-12]-cVert[(index+12)*3];
+    vec1.elements[1]=cVert[(numOfVertsC/3-12)+1]-cVert[((index+12)*3)+1];
+    vec1.elements[2]=cVert[(numOfVertsC/3-12)+2]-cVert[((index+12)*3)+2];
     //do vec2
-    vec2.elements[0]=cVert[(index+12)*3]-cVert[(numOfVertsC-36)];
-    vec2.elements[1]=cVert[((index+12)*3)+1]-cVert[numOfVertsC-36+1];
-    vec2.elements[2]=cVert[((index+12)*3)+2]-cVert[numOfVertsC-36+2];
+    vec2.elements[0]=cVert[(index+36)*3]-cVert[(numOfVertsC/3-12)];
+    vec2.elements[1]=cVert[((index+36)*3)+1]-cVert[numOfVertsC/3-12+1];
+    vec2.elements[2]=cVert[((index+36)*3)+2]-cVert[numOfVertsC/3-12+2];
     //do the cross product to make the normal of the first triangle
     normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
     normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
     normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
     //store it in the normals array
-    normals[(index)*3]=normal.elements[0];
-    normals[(index)*3+1]=normal.elements[1];
-    normals[(index)*3+2]=normal.elements[2];
-    //duplicate the normal for the same face
     normals[(index+12)*3]=normal.elements[0];
     normals[(index+12)*3+1]=normal.elements[1];
     normals[(index+12)*3+2]=normal.elements[2];
+    //duplicate the normal for the same face
+    normals[(index+36)*3]=normal.elements[0];
+    normals[(index+36)*3+1]=normal.elements[1];
+    normals[(index+36)*3+2]=normal.elements[2];
 
+    normals[numOfVertsC-36-36-36]=normal.elements[0];
+    normals[numOfVertsC-36-36-36]=normal.elements[1];
+    normals[numOfVertsC-36-36-36]=normal.elements[2];
+    //duplicate the normal for the same face
+    normals[numOfVertsC-36]=normal.elements[0];
+    normals[numOfVertsC-36]=normal.elements[1];
+    normals[numOfVertsC-36]=normal.elements[2];
 
-    indices[i+p+3] = index;
-    indices[i+p+4] = numOfVertsC/3 - 24;
-    indices[i+p+5] = numOfVertsC/3 - 12;
+    //subtract the elements of the the 3 verticies at index and index+13
+    indices[i+p+3] = index+12;
+    indices[i+p+4] = numOfVertsC/3 - 36;//48-48=0+12=12->0
+    indices[i+p+5] = numOfVertsC/3 - 12;//24
+
     numOfIndex+=6;
-    //-------------------------
-    //-------------------------
-    //calculate the normals
-
-    //-------------------------
-
-    /*
-    index=numOfVertsC/3 - 12;
-    var p=numOfIndex;
-    for(i=0;i<22;i+=2){
-      indices[i+p]=index;
-      indices[p+i+1]=index+1;
-      index++;
-      numOfIndex+=2;
-    }
-    numOfIndex+=2;
-    indices[numOfIndex-2]=index;
-    indices[numOfIndex-1]=numOfVertsC/3-12;
-    
-    
-    //make them proper triangles
-    var p=numOfIndex;
-    var index=(numOfVertsC/3)-24;
-    for (var i = 0; i < 24; i+=2) {
-      indices[numOfIndex+i]=index;
-      indices[numOfIndex+i+1]=12+index;
-      index++;
-    }
-    numOfIndex+=24;
-    */
     numOfCyl++;
     //-------------------------------------
     //light shit
     //works for the irst cylyinder but not the following
     var d=1;
-    /*
-    for(i=0;i<numOfNormals;i++){
-      normals[i]=1;
-    }*/
-    for(i=0;i<numOfVertsC;i+=3){
+    var p=numOfVertsC-144;
+    for(i=p;i<numOfVertsC;i+=3){
       var temp=new Vector3();
       temp.elements[0] = normals[i];
       temp.elements[1] = normals[i+1];
       temp.elements[2] = normals[i+2];
       temp=temp.normalize();
-      console.log("TEMP "+temp.elements);
       var nDotL = temp.elements[0] * lightDirection.elements[0] + 
                   temp.elements[1] * lightDirection.elements[1] + 
                   temp.elements[2] * lightDirection.elements[2];
-      console.log("UNCENSORED: "+nDotL);
       if(nDotL<0){
         nDotL=0;
-        console.log("fixed it");
       }
       nDotL=nDotL;
       //calculate the lighting
@@ -441,7 +463,7 @@ function drawCircle(gl){
     gl.uniform1i(boolio,0);
     gl.enableVertexAttribArray(a_Position);  
     gl.enableVertexAttribArray(a_Color);  
-
+gl.enable(gl.DEPTH_TEST);
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, cVert, gl.STATIC_DRAW);
 
@@ -456,34 +478,84 @@ function drawCircle(gl){
     gl.enableVertexAttribArray(b_Position); 
     console.log("VERTEX#: "+numOfVertsC+", "+"NORMAL#: "+numOfNormals);
     console.log("Color#: "+numberOfColors);
+    for (var i = 0; i < numOfVertsC/2; i++) {
+      if(i%3==0){
+        console.log("---------------------");
+      }
+      console.log("indices: "+indices[i]);
+    }
+    console.log("INDEX AT THIS POITN: "+index);
+    console.log("number of elements "+numOfVertsC);
+    console.log("NUMBEROF INDEXD: "+numOfIndex);
+
     var d=0;
     
   }
 }
-function normalCalculation(index){
+function normalCalculation(index, flipFlop){
     var normal=new Vector3();
     var vec1=new Vector3();
     var vec2=new Vector3();
     //subtract the elements of the the 3 verticies at index and index+13
-    vec1.elements[0]=cVert[(index+13)*3]-cVert[(index)*3];
-    vec1.elements[1]=cVert[((index+13)*3)+1]-cVert[((index)*3)+1];
-    vec1.elements[2]=cVert[((index+13)*3)+2]-cVert[((index)*3)+2];
-    //do vec2
-    vec2.elements[0]=cVert[(index+12)*3]-cVert[(index+13)*3];
-    vec2.elements[1]=cVert[((index+12)*3)+1]-cVert[((index+13)*3)+1];
-    vec2.elements[2]=cVert[((index+12)*3)+2]-cVert[((index+13)*3)+2];
-    //do the cross product to make the normal of the first triangle
-    normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
-    normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
-    normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
-    //store it in the normals array
-    normals[(index)*3]=normal.elements[0];
-    normals[(index)*3+1]=normal.elements[1];
-    normals[(index)*3+2]=normal.elements[2];
-    //duplicate the normal for the same face
-    normals[(index+12)*3]=normal.elements[0];
-    normals[(index+12)*3+1]=normal.elements[1];
-    normals[(index+12)*3+2]=normal.elements[2];
+    if(flipFlop){
+      vec1.elements[0]=cVert[(index + 25)  * 3]-cVert[(index) * 3];
+      vec1.elements[1]=cVert[((index + 25) * 3) + 1]-cVert[((index) * 3) + 1];
+      vec1.elements[2]=cVert[((index + 25) * 3) + 2]-cVert[((index) * 3) + 2];
+      //do vec2
+      vec2.elements[0]=cVert[(index+24)*3]-cVert[(index+25)*3];
+      vec2.elements[1]=cVert[((index+24)*3)+1]-cVert[((index+25)*3)+1];
+      vec2.elements[2]=cVert[((index+24)*3)+2]-cVert[((index+25)*3)+2];
+      //do the cross product to make the normal of the first triangle
+      normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
+      normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
+      normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
+      //store it in the normals array
+      normals[(index)*3]=normal.elements[0];
+      normals[(index)*3+1]=normal.elements[1];
+      normals[(index)*3+2]=normal.elements[2];
+      //duplicate the normal for the same face
+      normals[(index+24)*3]=normal.elements[0];
+      normals[(index+24)*3+1]=normal.elements[1];
+      normals[(index+24)*3+2]=normal.elements[2];
+
+      normals[(index+1)*3]=normal.elements[0];
+      normals[(index+1)*3+1]=normal.elements[1];
+      normals[(index+1)*3+2]=normal.elements[2];
+      //duplicate the normal for the same face
+      normals[(index+25)*3]=normal.elements[0];
+      normals[(index+25)*3+1]=normal.elements[1];
+      normals[(index+25)*3+2]=normal.elements[2];
+    }else {
+      //flop
+      vec1.elements[0]=cVert[(index + 25 + 12)  * 3]-cVert[(index + 12) * 3];
+      vec1.elements[1]=cVert[((index + 25 + 12) * 3) + 1]-cVert[((index + 12) * 3) + 1];
+      vec1.elements[2]=cVert[((index + 25 + 12) * 3) + 2]-cVert[((index + 12) * 3) + 2];
+      //do vec2
+      vec2.elements[0]=cVert[(index+24 + 12)*3]-cVert[(index+25+12)*3];
+      vec2.elements[1]=cVert[((index+24 + 12)*3)+1]-cVert[((index+25+12)*3)+1];
+      vec2.elements[2]=cVert[((index+24 + 12)*3)+2]-cVert[((index+25+12)*3)+2];
+      //do the cross product to make the normal of the first triangle
+      normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
+      normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
+      normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
+      //store it in the normals array
+      normals[(index + 12)*3]=normal.elements[0];
+      normals[(index + 12)*3+1]=normal.elements[1];
+      normals[(index + 12)*3+2]=normal.elements[2];
+      //duplicate the normal for the same face
+      normals[(index+24 + 12)*3]=normal.elements[0];
+      normals[(index+24 + 12)*3+1]=normal.elements[1];
+      normals[(index+24 + 12)*3+2]=normal.elements[2];
+
+      normals[(index + 12 +1)*3]=normal.elements[0];
+      normals[(index + 12 +1)*3+1]=normal.elements[1];
+      normals[(index + 12 +1)*3+2]=normal.elements[2];
+      //duplicate the normal for the same face
+      normals[(index+24 + 12+1)*3]=normal.elements[0];
+      normals[(index+24 + 12+1)*3+1]=normal.elements[1];
+      normals[(index+24 + 12+1)*3+2]=normal.elements[2];
+    }
+
 
 }
 function hover(ev,gl,canvas,a_Position){
