@@ -1,4 +1,3 @@
-// HelloCube.js (c) 2012 matsuda
 // Vertex shader program
 var VSHADER_SOURCE =
   'attribute vec4 a_Position;\n' +
@@ -26,16 +25,10 @@ var FSHADER_SOURCE =
   'void main() {\n' +
   '  gl_FragColor = vec4(v_Color.rgb,1);\n' +
   '}\n';
-//global variables
-var b_Position;
-var boolio;
+//global lighting variables
 var lightDirection = new Vector3([1,1,1]);
 var lightColor = new Vector3([1,1,1]);
-var a_Position;
-var a_Color;
-var enableMove=true;
-var numOfVerts=0;
-var numOfVertsC=0;
+//array allocation
 var vertices = new Float32Array(5000);
 var cVert = new Float32Array(5000);
 var lineVert= new Float32Array(5000);
@@ -43,16 +36,29 @@ var indices = new Uint16Array(5000);
 var normals = new Float32Array(5000);
 var colors = new Float32Array(5000);
 var numOfNormals=0;
+//buffers and attributes
 var vertexBuffer;
 var indexBuffer;
 var lineBuffer;
 var colorBuffer;
+var a_Position;
+var a_Color;
+var b_Position;
+var boolio;
+//itterators
 var numOfIndex=0;
 var numOfCyl=0;
 var numberOfColors=0;
+var numOfVerts=0;
+var numOfVertsC=0;
+//gl reference
 var gl;
+//misc
 var radius=.1;
 var debug=false;
+var enableMove=true;
+
+//main function
 function main() {
   setupIOSOR("fileName");
   // Retrieve <canvas> element
@@ -165,10 +171,6 @@ function duplicateVerts(rotMatrix,point){
 function drawCircle(gl){
   //stores the data for the first and second point of the cylynders base
   if(!debug){
-    if(numOfCyl>0){
-      //duplicate the last circle twice
-    }
-    //gets the initial points from the lineVerts that arnt printed to the screen
     var frontPoint={
       x:lineVert[numOfVerts-9],
       y:lineVert[numOfVerts-8]
@@ -188,140 +190,25 @@ function drawCircle(gl){
     rotMatrix.setRotate(30,rot.elements[0],rot.elements[1],rot.elements[2]);
     //point vector
     
-    var pVec=new Vector3([0,0,radius]);
-    cVert[numOfVertsC]=frontPoint.x;
-    cVert[numOfVertsC+1]=frontPoint.y;
-    cVert[numOfVertsC+2]=radius;
-    numOfVertsC+=3;
-
-    var num=0;
-    var amountOfV=numOfVertsC;
-    for (var i = 0; i <= 10; i++) {
-      pVec=rotMatrix.multiplyVector3(pVec);
-      num=amountOfV+i*3;
-      cVert[num]=frontPoint.x+pVec.elements[0];
-      cVert[num+1]=frontPoint.y+pVec.elements[1];
-      cVert[num+2]=pVec.elements[2];
-      numOfVertsC+=3;
-    }
-    if(numOfVertsC>700000000){
-        duplicateVerts(rotMatrix,frontPoint);
-        duplicateVerts(rotMatrix,frontPoint);
-        duplicateVerts(rotMatrix,frontPoint);
-    }else{
-        duplicateVerts(rotMatrix,frontPoint);
-    }
-
-    //-------------------------
+    duplicateVerts(rotMatrix,frontPoint);
+    duplicateVerts(rotMatrix,frontPoint);
+    console.log(numOfVertsC);
     if(numOfCyl>0){
-      var index = numOfVertsC/3 - 48;
-      var p = numOfIndex;
-      var flipFlop=false;
-      for(i=0;i<66;i+=6){
-        if(!flipFlop){
-          //triangle 1
-          indices[i+p] =   index;
-          indices[i+p+1] = index + 24 + 1;
-          indices[i+p+2] = index + 24;
-          //calculate the normal
-          normalCalculation(index,true);
-          //triangle 2
-          indices[i+p+3] = index;
-          indices[i+p+4] = index + 1;
-          indices[i+p+5] = index + 24 + 1;
-        }else{
-          //triangle 1
-          indices[i+p] =   index + 12;
-          indices[i+p+1] = index + 24 + 1 + 12;
-          indices[i+p+2] = index + 24 + 12;
-          //calculate the normal
-          normalCalculation(index, false);
-          //triangle 2
-          indices[i+p+3] = index + 12;
-          indices[i+p+4] = index + 1 + 12;
-          indices[i+p+5] = index + 13 + 12;
-        }
-        if(flipFlop){
-          flipFlop =false;
-        }else{
-          flipFlop = true;
-        }
-        index++;
-        numOfIndex+=6;
-        //then do it in reverse
-      }
-      numOfNormals+=33;
-  
-    //connect the last one
-    indices[i+p] =   index+12;
-    indices[i+p+1] = numOfVertsC/3 - 12;
-    indices[i+p+2] = index+36;
-
-    var normal=new Vector3();
-    var vec1=new Vector3();
-    var vec2=new Vector3();
-    console.log("FOR UR HONOR");
-    vec1.elements[0]=cVert[numOfVertsC/3-12]-cVert[(index+12)*3];
-    vec1.elements[1]=cVert[(numOfVertsC/3-12)+1]-cVert[((index+12)*3)+1];
-    vec1.elements[2]=cVert[(numOfVertsC/3-12)+2]-cVert[((index+12)*3)+2];
-    console.log("tasty");
-    console.log(numOfVertsC/3-12);
-    console.log((index+12)*3);
-    console.log((index+36)*3);
-    //do vec2
-    vec2.elements[0]=cVert[(index+36)*3]-cVert[(numOfVertsC/3-12)];
-    vec2.elements[1]=cVert[((index+36)*3)+1]-cVert[numOfVertsC/3-12+1];
-    vec2.elements[2]=cVert[((index+36)*3)+2]-cVert[numOfVertsC/3-12+2];
-    //do the cross product to make the normal of the first triangle
-    normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
-    normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
-    normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
-    //store it in the normals array
-    normals[(index+12)*3]=normal.elements[0];
-    normals[(index+12)*3+1]=normal.elements[1];
-    normals[(index+12)*3+2]=normal.elements[2];
-    //duplicate the normal for the same face
-    normals[(index+36)*3]=normal.elements[0];
-    normals[(index+36)*3+1]=normal.elements[1];
-    normals[(index+36)*3+2]=normal.elements[2];
-
-    normals[numOfVertsC-36-36-36]=normal.elements[0];
-    normals[numOfVertsC-36-36-36]=normal.elements[1];
-    normals[numOfVertsC-36-36-36]=normal.elements[2];
-    //duplicate the normal for the same face
-    normals[numOfVertsC-36]=normal.elements[0];
-    normals[numOfVertsC-36]=normal.elements[1];
-    normals[numOfVertsC-36]=normal.elements[2];
-
-    //subtract the elements of the the 3 verticies at index and index+13
-    indices[i+p+3] = index+12;
-    indices[i+p+4] = numOfVertsC/3 - 36;//48-48=0+12=12->0
-    indices[i+p+5] = numOfVertsC/3 - 12;//24
-
-    numOfIndex+=6;
+      calculateIndicies();
     }
-    //-------------------------
 
-    pVec=new Vector3([0,0,radius]);
-    cVert[numOfVertsC]=backPoint.x;
-    cVert[numOfVertsC+1]=backPoint.y;
-    cVert[numOfVertsC+2]=radius;
-    numOfVertsC+=3;
-
-    var num = 0;
-    var amountOfV = numOfVertsC;
-    for (var i = 0; i <= 10; i++) {
-      pVec = rotMatrix.multiplyVector3(pVec);
-      num =  amountOfV+i*3;
-      cVert[num] =   backPoint.x+pVec.elements[0];
-      cVert[num+1] = backPoint.y+pVec.elements[1];
-      cVert[num+2] = pVec.elements[2];
-      numOfVertsC+=3;
-    }
     duplicateVerts(rotMatrix,backPoint);
-    //duplicateVerts(rotMatrix,backPoint);
-    //duplicateVerts(rotMatrix,backPoint);
-    //-------------------------
+    duplicateVerts(rotMatrix,backPoint);
+ console.log(numOfVertsC);
+    calculateIndicies();
+
+    calculateLighting();
+    bufferHandling();
+
+    //debugPrint();
+  }
+}
+function calculateIndicies(){
     var index = numOfVertsC/3 - 48;
     console.log("GIMME MY INDEX: "+index);
     var p = numOfIndex;
@@ -333,22 +220,24 @@ function drawCircle(gl){
         indices[i+p+1] = index + 24 + 1;
         indices[i+p+2] = index + 24;
         //calculate the normal
-        normalCalculation(index,true);
+
         //triangle 2
         indices[i+p+3] = index;
         indices[i+p+4] = index + 1;
         indices[i+p+5] = index + 24 + 1;
+        normalCalculation(index,true);
       }else{
         //triangle 1
         indices[i+p] =   index + 12;
         indices[i+p+1] = index + 24 + 1 + 12;
         indices[i+p+2] = index + 24 + 12;
         //calculate the normal
-        normalCalculation(index, false);
         //triangle 2
         indices[i+p+3] = index + 12;
         indices[i+p+4] = index + 1 + 12;
         indices[i+p+5] = index + 24 + 1 + 12;
+        normalCalculation(index, false);
+
       }
       if(flipFlop){
         flipFlop =false;
@@ -359,15 +248,22 @@ function drawCircle(gl){
       numOfIndex+=6;
       //then do it in reverse
     }
-    console.log("FLIPFLOP: "+flipFlop);
-    //find the normal for the last part of the cy;inder
-    //----------------------------------------------
-    //TOTO THIS PLZ
-    //----------------------------------------------
-    //connect the last one
+
     indices[i+p] =   index+12;
     indices[i+p+1] = numOfVertsC/3 - 12;
     indices[i+p+2] = index+36;
+
+    endNormals(index);
+    
+    indices[i+p+3] = index+12;
+    indices[i+p+4] = numOfVertsC/3 - 36;//48-48=0+12=12->0
+    indices[i+p+5] = numOfVertsC/3 - 12;//24
+
+    numOfIndex+=6;
+    numOfCyl++;
+
+}
+function endNormals(index){
     var normal=new Vector3();
     var vec1=new Vector3();
     var vec2=new Vector3();
@@ -399,17 +295,9 @@ function drawCircle(gl){
     normals[numOfVertsC-36]=normal.elements[0];
     normals[numOfVertsC-36]=normal.elements[1];
     normals[numOfVertsC-36]=normal.elements[2];
-
-    //subtract the elements of the the 3 verticies at index and index+13
-    indices[i+p+3] = index+12;
-    indices[i+p+4] = numOfVertsC/3 - 36;//48-48=0+12=12->0
-    indices[i+p+5] = numOfVertsC/3 - 12;//24
-
-    numOfIndex+=6;
-    numOfCyl++;
-    //-------------------------------------
-    //light shit
-    //works for the irst cylyinder but not the following
+}
+function calculateLighting(){
+      //works for the irst cylyinder but not the following
     var d=1;
     var p=numOfVertsC-144;
     for(i=p;i<numOfVertsC;i+=3){
@@ -448,9 +336,8 @@ function drawCircle(gl){
       colors[i+2] = diffuse.elements[2];
       numberOfColors+=3;
     }
-    //-------------------------------------
-
-    //make another circle on the other side
+}
+function bufferHandling(){
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
     gl.uniform1i(boolio,1);
@@ -462,8 +349,9 @@ function drawCircle(gl){
     gl.drawArrays(gl.LINE_STRIP,0,numOfVerts/3);
     gl.uniform1i(boolio,0);
     gl.enableVertexAttribArray(a_Position);  
-    gl.enableVertexAttribArray(a_Color);  
-gl.enable(gl.DEPTH_TEST);
+    gl.enableVertexAttribArray(a_Color); 
+
+    gl.enable(gl.DEPTH_TEST);
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, cVert, gl.STATIC_DRAW);
 
@@ -476,21 +364,15 @@ gl.enable(gl.DEPTH_TEST);
     gl.disableVertexAttribArray(b_Position);
     gl.drawElements(gl.TRIANGLES,numOfIndex,gl.UNSIGNED_SHORT,0);
     gl.enableVertexAttribArray(b_Position); 
-    console.log("VERTEX#: "+numOfVertsC+", "+"NORMAL#: "+numOfNormals);
-    console.log("Color#: "+numberOfColors);
-    for (var i = 0; i < numOfVertsC/2; i++) {
-      if(i%3==0){
-        console.log("---------------------");
-      }
-      console.log("indices: "+indices[i]);
-    }
-    console.log("INDEX AT THIS POITN: "+index);
-    console.log("number of elements "+numOfVertsC);
-    console.log("NUMBEROF INDEXD: "+numOfIndex);
 
     var d=0;
-    
-  }
+    debugPrint();
+}
+function debugPrint(){
+  console.log("NUMBEROFVERTS: "+numOfVertsC);
+  console.log("NUMBEROFINDECIES: "+numOfIndex);
+  console.log("NUMBEROFNORMALS: "+numOfNormals);
+  console.log("NUMBEROFCOLORS: "+numberOfColors);
 }
 function normalCalculation(index, flipFlop){
     var normal=new Vector3();
@@ -579,7 +461,9 @@ function hover(ev,gl,canvas,a_Position){
       gl.bufferData(gl.ARRAY_BUFFER,lineVert,gl.STATIC_DRAW);
       gl.disableVertexAttribArray(a_Position);
       gl.disableVertexAttribArray(a_Color);
+      
       gl.drawArrays(gl.LINE_STRIP,0,numOfVerts/3);
+
       gl.uniform1i(boolio,0);
       gl.enableVertexAttribArray(a_Position);  
       gl.enableVertexAttribArray(a_Color);
@@ -641,26 +525,53 @@ function readSOR(){
       cVert[i]=SORObj.vertices[i];
       numV++;
     }
-
     var num=0;
     for(i=0;i<SORObj.indexes[4999];i++){
       indices[i]=SORObj.indexes[i];
       num++;
     }
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, cVert, gl.STATIC_DRAW);
+    //gets the index and verts values from the file
+    numOfIndex=SORObj.indexes[4999];
+    numOfVertsC=SORObj.indexes[4998];
 
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    console.log(numOfIndex+", "+numOfVertsC);
+    var tempIndex=numOfIndex;
+    var tempVerts=numOfVertsC;
+    //go through each cyl
+    numOfIndex=0;
+    numOfVertsC=0;
+    normals=new Float32Array(5000);
+    numberOfColors=0;
+    numOfNormals=0;
+    numOfCyl=0;
+    indices=new Uint16Array(5000);
+    while(numOfIndex<tempIndex){
+      numOfVertsC+=72;
+      if(numOfCyl>0){
+          calculateIndicies();
+      }
+      numOfCyl++;
+      numOfVertsC+=72;
 
-    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-    gl.drawElements(gl.LINES,num,gl.UNSIGNED_SHORT,0);
-    
+      calculateIndicies();
+
+      console.log(numOfVertsC);
+      console.log(numOfIndex);
+      calculateLighting();
+    }
+    for (var i = 0; i < numOfVertsC; i++) {
+      console.log(normals[i]);
+    }
+    console.log(normals[i]);
+    numOfVerts=3;
+    bufferHandling();
   }
 }
 //saves the cylinder as an obj
 function saveSOR(){
   indices[4999]=numOfIndex;
+  //console.log(numOfVertsC);
+  indices[4998]=numOfVertsC;
   var p = prompt("Please enter your file name", "temperooni");
 
   if (p != null) {
@@ -669,11 +580,9 @@ function saveSOR(){
 
   saveFile(new SOR(p, cVert, indices));
 }
-
+//TODO
 /*
-TODO - List
-----------------------------------------------------------
-1) reimplement rubber-banding from lab 1 and print the line verticies to to the screen
-2) do the actual lab
-----------------------------------------------------------
+1) fix the normal or color error that im getting
+2) make it loadable
+3) display normals with red lines that are toggleable with an html button
 */
