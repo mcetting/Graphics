@@ -2,18 +2,23 @@
 var VSHADER_SOURCE =
   'attribute vec4 a_Position;\n' +
   'attribute vec4 b_Position;\n' +
+  'attribute vec4 surfaceNormal_Position;\n' +
   'attribute vec4 a_Color;\n' +
   'attribute vec4 a_Normal;\n' +
   'uniform mat4 u_MvpMatrix;\n' +
-  'uniform bool doIt;\n' +
+  'uniform int doIt;\n' +
   'varying vec4 v_Color;\n' +
   'void main() {\n' +
-  '  if(doIt){' +
+  '  if(doIt==1){' +
   '      gl_Position=u_MvpMatrix*b_Position;\n' +
-  '  }else{\n' +
+  '      v_Color = vec4(0,0,0,1);\n' +
+  '  }else if(doIt==0){\n' +
   '      gl_Position = u_MvpMatrix * a_Position;\n' +
+  '      v_Color = a_Color;\n' +
+  '  }else{\n' +
+  '      gl_Position=u_MvpMatrix*surfaceNormal_Position;\n' +
+  '      v_Color = vec4(1,0,0,1);\n' +
   '  }\n' +
-  '  v_Color = a_Color;\n' +
   '}\n';
 
 // Fragment shader program
@@ -28,6 +33,7 @@ var FSHADER_SOURCE =
 //global lighting variables
 var lightDirection = new Vector3([1,1,1]);
 var lightColor = new Vector3([1,1,1]);
+var color = new Vector3([0,1,0]);
 //array allocation
 var vertices = new Float32Array(5000);
 var cVert = new Float32Array(5000);
@@ -35,15 +41,18 @@ var lineVert= new Float32Array(5000);
 var indices = new Uint16Array(5000);
 var normals = new Float32Array(5000);
 var colors = new Float32Array(5000);
+var surfaceNormals = new Float32Array(5000);
 var numOfNormals=0;
 //buffers and attributes
 var vertexBuffer;
 var indexBuffer;
 var lineBuffer;
 var colorBuffer;
+var normalBuffer;
 var a_Position;
 var a_Color;
 var b_Position;
+var surfaceNormal_Position;
 var boolio;
 //itterators
 var numOfIndex=0;
@@ -51,13 +60,17 @@ var numOfCyl=0;
 var numberOfColors=0;
 var numOfVerts=0;
 var numOfVertsC=0;
+var numOfSurfaceNormals=0;
 //gl reference
 var gl;
 //misc
-var radius=.1;
+var radius=.05;
 var debug=false;
 var enableMove=true;
-
+var perspectiveBool=false;
+var displayN = false;
+var u_MvpMatrix;
+var mvpMatrix;
 //main function
 function main() {
   setupIOSOR("fileName");
@@ -81,7 +94,7 @@ function main() {
     return;
   }
   // Get the storage location of u_MvpMatrix
-  var u_MvpMatrix = gl.getUniformLocation(gl.program, 'u_MvpMatrix');
+  u_MvpMatrix = gl.getUniformLocation(gl.program, 'u_MvpMatrix');
   if (!u_MvpMatrix) {
     console.log('Failed to get the storage location of u_MvpMatrix');
     return;
@@ -93,16 +106,28 @@ function main() {
   gl.enable(gl.DEPTH_TEST);
   // Set the eye point and the viewing volume
   
-  var mvpMatrix = new Matrix4();
-  // mvpMatrix.setPerspective(30, 1, 1, 100);
+  mvpMatrix = new Matrix4();
+
   mvpMatrix.setOrtho(-1, 1,-1, 1,-1, 1);
-  //mvpMatrix.lookAt(0, 0, 5, 0, 0, 0, 0, 1, 0);
-  
   // Pass the model view projection matrix to u_MvpMatrix
   gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
   // Clear color and depth buffer
   canvas.onmousedown = function(ev){ click(ev, gl, canvas, a_Position); };
   canvas.onmousemove=function(ev){hover(ev,gl,canvas,a_Position);};
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+}
+function swapPersp(){
+  if(perspectiveBool)
+  {
+    mvpMatrix.setOrtho(-1, 1,-1, 1,-1, 1);
+    perspectiveBool=false;
+  }else{
+    mvpMatrix.setPerspective(30, 1, 1, 100);
+    mvpMatrix.lookAt(0, 0, 5, 0, 0, 0, 0, 1, 0);
+    perspectiveBool=true;
+  }
+  gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
+  bufferHandling();
 }
 //indices form triangles
 function initVertexBuffers(gl) {
@@ -111,6 +136,7 @@ function initVertexBuffers(gl) {
   indexBuffer = gl.createBuffer();
   lineBuffer = gl.createBuffer();
   colorBuffer = gl.createBuffer();
+  normalBuffer = gl.createBuffer();
 
   var FSIZE = cVert.BYTES_PER_ELEMENT;
 
@@ -143,6 +169,16 @@ function initVertexBuffers(gl) {
 
   gl.vertexAttribPointer(a_Color, 3, gl.FLOAT, false, FSIZE * 3, 0);
   gl.enableVertexAttribArray(a_Color);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER,normalBuffer);
+  surfaceNormal_Position = gl.getAttribLocation(gl.program, 'surfaceNormal_Position');
+  if(surfaceNormal_Position < 0) {
+    console.log('Failed to get the storage location of surfaceNormal_Position');
+    return -1;
+  }
+
+  gl.vertexAttribPointer(surfaceNormal_Position, 3, gl.FLOAT, false, FSIZE * 3, 0);
+  gl.enableVertexAttribArray(surfaceNormal_Position);
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
@@ -190,16 +226,15 @@ function drawCircle(gl){
     rotMatrix.setRotate(30,rot.elements[0],rot.elements[1],rot.elements[2]);
     //point vector
     
-    duplicateVerts(rotMatrix,frontPoint);
-    duplicateVerts(rotMatrix,frontPoint);
-    console.log(numOfVertsC);
+    duplicateVerts(rotMatrix,frontPoint);//36
+    duplicateVerts(rotMatrix,frontPoint);//36-72
     if(numOfCyl>0){
       calculateIndicies();
     }
 
+    duplicateVerts(rotMatrix,backPoint);//144
     duplicateVerts(rotMatrix,backPoint);
-    duplicateVerts(rotMatrix,backPoint);
- console.log(numOfVertsC);
+
     calculateIndicies();
 
     calculateLighting();
@@ -248,7 +283,6 @@ function calculateIndicies(){
       numOfIndex+=6;
       //then do it in reverse
     }
-
     indices[i+p] =   index+12;
     indices[i+p+1] = numOfVertsC/3 - 12;
     indices[i+p+2] = index+36;
@@ -264,37 +298,55 @@ function calculateIndicies(){
 
 }
 function endNormals(index){
+    //calculates the proper end normal by hand
     var normal=new Vector3();
     var vec1=new Vector3();
     var vec2=new Vector3();
-  
-    vec1.elements[0]=cVert[numOfVertsC/3-12]-cVert[(index+12)*3];
-    vec1.elements[1]=cVert[(numOfVertsC/3-12)+1]-cVert[((index+12)*3)+1];
-    vec1.elements[2]=cVert[(numOfVertsC/3-12)+2]-cVert[((index+12)*3)+2];
+    //36 in first run
+    vec1.elements[0]=cVert[numOfVertsC-36]-cVert[(index+12)*3];
+    vec1.elements[1]=cVert[(numOfVertsC-36)+1]-cVert[((index+12)*3)+1];
+    vec1.elements[2]=cVert[(numOfVertsC-36)+2]-cVert[((index+12)*3)+2];
     //do vec2
-    vec2.elements[0]=cVert[(index+36)*3]-cVert[(numOfVertsC/3-12)];
-    vec2.elements[1]=cVert[((index+36)*3)+1]-cVert[numOfVertsC/3-12+1];
-    vec2.elements[2]=cVert[((index+36)*3)+2]-cVert[numOfVertsC/3-12+2];
+    vec2.elements[0]=cVert[(index+36)*3]-cVert[(numOfVertsC-36)];
+    vec2.elements[1]=cVert[((index+36)*3)+1]-cVert[(numOfVertsC-36)+1];
+    vec2.elements[2]=cVert[((index+36)*3)+2]-cVert[(numOfVertsC-36)+2];
+    console.log("index: "+index+" numOfVertsC: "+numOfVertsC);
     //do the cross product to make the normal of the first triangle
     normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
     normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
     normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
+    normal.normalize();
     //store it in the normals array
-    normals[(index+12)*3]=normal.elements[0];
-    normals[(index+12)*3+1]=normal.elements[1];
-    normals[(index+12)*3+2]=normal.elements[2];
+    console.log(normal.elements[0]+", "+normal.elements[1]+", "+normal.elements[2]);
+    /*
+    normal.elements[0]=Math.abs(normal.elements[0]);
+    normal.elements[1]=Math.abs(normal.elements[1]);
+    normal.elements[2]=Math.abs(normal.elements[2]);*/
+    calculateSurfaceNormals(vec1, normal,index,false);
+    //problem with the end point normal solved by taking the absolute value
+    normals[(index+12)*3]=(normal.elements[0]);
+    normals[(index+12)*3 + 1]=(normal.elements[1]);
+    normals[(index+12)*3 + 2]=(normal.elements[2]);
     //duplicate the normal for the same face
-    normals[(index+36)*3]=normal.elements[0];
-    normals[(index+36)*3+1]=normal.elements[1];
-    normals[(index+36)*3+2]=normal.elements[2];
+    normals[(index+36)*3]=(normal.elements[0]);
+    normals[(index+36)*3 + 1]=(normal.elements[1]);
+    normals[(index+36)*3 + 2]=(normal.elements[2]);
 
-    normals[numOfVertsC-36-36-36]=normal.elements[0];
-    normals[numOfVertsC-36-36-36]=normal.elements[1];
-    normals[numOfVertsC-36-36-36]=normal.elements[2];
+    normals[numOfVertsC-36-36-36]=(normal.elements[0]);
+    normals[numOfVertsC-36-36-36 + 1]=(normal.elements[1]);
+    normals[numOfVertsC-36-36-36 + 2]=(normal.elements[2]);
     //duplicate the normal for the same face
-    normals[numOfVertsC-36]=normal.elements[0];
-    normals[numOfVertsC-36]=normal.elements[1];
-    normals[numOfVertsC-36]=normal.elements[2];
+    normals[numOfVertsC-36]=(normal.elements[0]);
+    normals[numOfVertsC-36 + 1]=(normal.elements[1]);
+    normals[numOfVertsC-36 + 2]=(normal.elements[2]);
+}
+function displayNormals(){
+  if(displayN){
+    displayN=false;
+  }else{
+    displayN=true;
+  }
+  bufferHandling();
 }
 function calculateLighting(){
       //works for the irst cylyinder but not the following
@@ -315,7 +367,6 @@ function calculateLighting(){
       nDotL=nDotL;
       //calculate the lighting
       var diffuse = new Vector3();
-      var color =   new Vector3([0,1,0]);
       //color=color.normalize();
       lightColor=lightColor.normalize();
       //do the multiplication manually?
@@ -340,13 +391,18 @@ function calculateLighting(){
 function bufferHandling(){
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
+    gl.disableVertexAttribArray(surfaceNormal_Position);
+
+
     gl.uniform1i(boolio,1);
     gl.bindBuffer(gl.ARRAY_BUFFER, lineBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, lineVert, gl.STATIC_DRAW);
     //divide by 3 for xyz
     gl.disableVertexAttribArray(a_Position);
     gl.disableVertexAttribArray(a_Color);
+    gl.disableVertexAttribArray(surfaceNormal_Position);
     gl.drawArrays(gl.LINE_STRIP,0,numOfVerts/3);
+
     gl.uniform1i(boolio,0);
     gl.enableVertexAttribArray(a_Position);  
     gl.enableVertexAttribArray(a_Color); 
@@ -354,7 +410,23 @@ function bufferHandling(){
     gl.enable(gl.DEPTH_TEST);
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, cVert, gl.STATIC_DRAW);
+    if(displayN){
+      gl.uniform1i(boolio,2);
+      gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, surfaceNormals, gl.STATIC_DRAW);
+      gl.disableVertexAttribArray(b_Position);
+      gl.disableVertexAttribArray(a_Position);
+      gl.disableVertexAttribArray(a_Color);
+      gl.enableVertexAttribArray(surfaceNormal_Position);
 
+      gl.drawArrays(gl.LINES,0,numOfSurfaceNormals/3);
+
+      gl.disableVertexAttribArray(surfaceNormal_Position);
+      gl.enableVertexAttribArray(a_Position); 
+      gl.enableVertexAttribArray(b_Position); 
+      gl.enableVertexAttribArray(a_Color); 
+      gl.uniform1i(boolio,0);
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
 
@@ -384,6 +456,8 @@ function normalCalculation(index, flipFlop){
       vec1.elements[1]=cVert[((index + 25) * 3) + 1]-cVert[((index) * 3) + 1];
       vec1.elements[2]=cVert[((index + 25) * 3) + 2]-cVert[((index) * 3) + 2];
       //do vec2
+      //store it in surfaceNormals
+
       vec2.elements[0]=cVert[(index+24)*3]-cVert[(index+25)*3];
       vec2.elements[1]=cVert[((index+24)*3)+1]-cVert[((index+25)*3)+1];
       vec2.elements[2]=cVert[((index+24)*3)+2]-cVert[((index+25)*3)+2];
@@ -391,6 +465,9 @@ function normalCalculation(index, flipFlop){
       normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
       normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
       normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
+      normal.normalize();
+      calculateSurfaceNormals(vec1,normal,index,true);
+
       //store it in the normals array
       normals[(index)*3]=normal.elements[0];
       normals[(index)*3+1]=normal.elements[1];
@@ -420,6 +497,8 @@ function normalCalculation(index, flipFlop){
       normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
       normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
       normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
+      normal.normalize();
+      calculateSurfaceNormals(vec1,normal,index,false);
       //store it in the normals array
       normals[(index + 12)*3]=normal.elements[0];
       normals[(index + 12)*3+1]=normal.elements[1];
@@ -440,6 +519,32 @@ function normalCalculation(index, flipFlop){
 
 
 }
+function calculateSurfaceNormals(vec1,normal,index,flipFlop){
+  if(flipFlop){
+      surfaceNormals[numOfSurfaceNormals]=vec1.elements[0]/2 + cVert[(index) * 3];
+      surfaceNormals[numOfSurfaceNormals+1]=vec1.elements[1]/2 + cVert[((index) * 3) + 1];
+      surfaceNormals[numOfSurfaceNormals+2]=vec1.elements[2]/2 + cVert[((index) * 3) + 2];
+      numOfSurfaceNormals+=3;
+
+      surfaceNormals[numOfSurfaceNormals]=vec1.elements[0]/2 + cVert[(index) * 3] + normal.elements[0] * .1;
+      surfaceNormals[numOfSurfaceNormals+1]=vec1.elements[1]/2 + cVert[((index) * 3) + 1] + normal.elements[1] * .1;
+      surfaceNormals[numOfSurfaceNormals+2]=vec1.elements[2]/2 + cVert[((index) * 3) + 2] + normal.elements[2] * .1;
+      numOfSurfaceNormals+=3;
+      console.log(normal.elements[0]+", "+normal.elements[1]+", "+normal.elements[2]);
+  }else{
+      surfaceNormals[numOfSurfaceNormals]=vec1.elements[0]/2 + cVert[(index+12) * 3];
+      surfaceNormals[numOfSurfaceNormals+1]=vec1.elements[1]/2 + cVert[((index+12) * 3) + 1];
+      surfaceNormals[numOfSurfaceNormals+2]=vec1.elements[2]/2 + cVert[((index+12) * 3) + 2];
+      numOfSurfaceNormals+=3;
+
+      surfaceNormals[numOfSurfaceNormals]=vec1.elements[0]/2 + cVert[(index+12) * 3] + normal.elements[0] * .1;
+      surfaceNormals[numOfSurfaceNormals+1]=vec1.elements[1]/2 + cVert[((index+12) * 3) + 1] + normal.elements[1] * .1;
+      surfaceNormals[numOfSurfaceNormals+2]=vec1.elements[2]/2 + cVert[((index+12) * 3) + 2] + normal.elements[2] * .1;
+      numOfSurfaceNormals+=3;
+      console.log(vec1.elements[0]+", "+vec1.elements[1]+", "+vec1.elements[2]);
+  }
+
+}
 function hover(ev,gl,canvas,a_Position){
   if(enableMove){
     var x = ev.clientX;
@@ -456,6 +561,10 @@ function hover(ev,gl,canvas,a_Position){
       
       gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
+      gl.disableVertexAttribArray(surfaceNormal_Position);
+
+
+
       gl.uniform1i(boolio,1);
       gl.bindBuffer(gl.ARRAY_BUFFER,lineBuffer);
       gl.bufferData(gl.ARRAY_BUFFER,lineVert,gl.STATIC_DRAW);
@@ -471,6 +580,23 @@ function hover(ev,gl,canvas,a_Position){
       gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, cVert, gl.STATIC_DRAW);
 
+      if(displayN){
+        gl.uniform1i(boolio,2);
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, surfaceNormals, gl.STATIC_DRAW);
+
+        gl.disableVertexAttribArray(a_Position);
+        gl.disableVertexAttribArray(a_Color);
+        gl.enableVertexAttribArray(surfaceNormal_Position);
+
+        gl.drawArrays(gl.LINES,0,numOfSurfaceNormals/3);
+
+        gl.disableVertexAttribArray(surfaceNormal_Position);
+        gl.enableVertexAttribArray(a_Position);  
+        gl.enableVertexAttribArray(a_Color); 
+        gl.uniform1i(boolio,0);
+      }
+
       gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
 
@@ -483,11 +609,32 @@ function hover(ev,gl,canvas,a_Position){
     }
   }
 }
-function click(ev, gl, canvas, a_Position) {
+var colorIndex=0;
+function newColor(){
+  colorIndex++;
+  if(colorIndex>2){
+    colorIndex=0;
+  }
+  if(colorIndex==0){
+    color=new Vector3([0,1,0]);
+  }else if(colorIndex==1){
+    color=new Vector3([1,0,0]);
+  }else{
+    color=new Vector3([0,0,1]);
+  }
+  loading();
+  //calculateLighting();
+  bufferHandling();
+}
+function changeBackground(){
+
   gl.clearColor(Math.floor(Math.random()*100)/100,
          Math.floor(Math.random()*100)/100,
          Math.floor(Math.random()*100)/100,
          Math.floor(Math.random()*100)/100);
+  bufferHandling();
+}
+function click(ev, gl, canvas, a_Position) {
   if(enableMove){
     var x = ev.clientX;
     var y = ev.clientY; 
@@ -515,26 +662,7 @@ function click(ev, gl, canvas, a_Position) {
       //adds another vertex at the same spot but doesnt use it for circle calc for rubberbanding
   }
 }
-//reads the data from the saved SOR file and fills the arrays for drawing
-function readSOR(){
-  var SORObj = readFile();
-  //reset all the variables and arrays then load them in like this
-  if(SORObj!=null){
-    var numV=0;
-    for(i=0;i<5000;i++){
-      cVert[i]=SORObj.vertices[i];
-      numV++;
-    }
-    var num=0;
-    for(i=0;i<SORObj.indexes[4999];i++){
-      indices[i]=SORObj.indexes[i];
-      num++;
-    }
-    //gets the index and verts values from the file
-    numOfIndex=SORObj.indexes[4999];
-    numOfVertsC=SORObj.indexes[4998];
-
-    console.log(numOfIndex+", "+numOfVertsC);
+function loading(){
     var tempIndex=numOfIndex;
     var tempVerts=numOfVertsC;
     //go through each cyl
@@ -559,10 +687,26 @@ function readSOR(){
       console.log(numOfIndex);
       calculateLighting();
     }
-    for (var i = 0; i < numOfVertsC; i++) {
-      console.log(normals[i]);
+}
+//reads the data from the saved SOR file and fills the arrays for drawing
+function readSOR(){
+  var SORObj = readFile();
+  //reset all the variables and arrays then load them in like this
+  if(SORObj!=null){
+    var numV=0;
+    for(i=0;i<5000;i++){
+      cVert[i]=SORObj.vertices[i];
+      numV++;
     }
-    console.log(normals[i]);
+    var num=0;
+    for(i=0;i<SORObj.indexes[4999];i++){
+      indices[i]=SORObj.indexes[i];
+      num++;
+    }
+    //gets the index and verts values from the file
+    numOfIndex=SORObj.indexes[4999];
+    numOfVertsC=SORObj.vertices[4998];
+    loading();
     numOfVerts=3;
     bufferHandling();
   }
