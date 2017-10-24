@@ -1,0 +1,38 @@
+body{
+    background-image: url('bg.jpg');
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+    background-attachment: fixed;
+}
+#projectHeader{
+	float:center;
+	background-color: tan;
+	border: 5px solid black;
+	margin-bottom: 10px; 
+	margin-top: 10px; 
+	width:35%; 
+	height:80px;
+}
+#webgl{
+	border: 5px solid black;
+}
+#inputArea{
+	background-color: #555555;
+	border: 5px solid black; 
+	width: 500px;
+	float:center;
+}
+#input{
+	margin-top: 10px;
+}
+button.button{
+	margin-top: 10px;
+}
+#slider{
+	width:500px;
+}
+#fileName{
+	background-color: white;
+	border: 1px solid black;
+}
