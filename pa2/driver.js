@@ -91,8 +91,8 @@ function main() {
       gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
       bufferHandling();
     }else if(ev.keyCode==68){
+      //D
       var mat=new Matrix4();
-
       mat.setRotate(angle,0,1,0);
       globalPos=mat.multiplyVector3(globalPos);
       mvpMatrix.setPerspective(30,1,1,100);
