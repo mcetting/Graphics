@@ -31,9 +31,11 @@ var FSHADER_SOURCE =
   '  gl_FragColor = vec4(v_Color.rgb,1);\n' +
   '}\n';
 //global lighting variables
+var gloss=5;
 var lightDirection = new Vector3([1,1,1]);
+var specularColor = new Vector3([0,1,0])
 var lightColor = new Vector3([1,1,1]);
-var color = new Vector3([0,1,0]);
+var color = new Vector3([1,0,0]);
 //array allocation
 var vertices = new Float32Array(5000);
 var cVert = new Float32Array(5000);
@@ -71,8 +73,22 @@ var perspectiveBool=false;
 var displayN = false;
 var u_MvpMatrix;
 var mvpMatrix;
+var slider;
+var mode=true;
 //main function
+//overright
 function main() {
+  slider=document.getElementById("sliderValue");
+  slider.oninput = function(){
+    gloss = this.value;
+    //recalc the lighting
+    if(mode){
+      loading();
+      bufferHandling();
+    }else{
+      smoothshading();
+    }
+  }
   setupIOSOR("fileName");
   // Retrieve <canvas> element
   var canvas = document.getElementById('webgl');
@@ -348,7 +364,7 @@ function displayNormals(){
 function calculateLighting(){
       //works for the irst cylyinder but not the following
     var d=1;
-    var p=numOfVertsC-144;
+    var p=numOfVertsC-144;//calculates for the last cyl only
     for(i=p;i<numOfVertsC;i+=3){
       var temp=new Vector3();
       temp.elements[0] = normals[i];
@@ -377,14 +393,72 @@ function calculateLighting(){
       diffuse.elements[2] = diffuse.elements[2] * nDotL;
       //diffuse.elements=lightColor.elements * color.elements * nDotL;
       d++;
+      //specular
+      var halfwayNormal=halfwayVector();
+      var light=vector3Multiply(specularColor,lightColor);
+      var nDotH=dotProduct(temp,halfwayNormal);
+      var spec=new Vector3();
+
+      spec.elements[0] = light.elements[0] * Math.pow(nDotH,gloss);
+      spec.elements[1] = light.elements[1] * Math.pow(nDotH,gloss);
+      spec.elements[2] = light.elements[2] * Math.pow(nDotH,gloss);
+      //add a final .2 to the blue for ambient lskjdgkfh
+      var finalColor=new Vector3([0,0,0]);
+      finalColor.elements[0] = diffuse.elements[0];
+      finalColor.elements[1] = spec.elements[1];
+      finalColor.elements[2] = .2;
       //somehow pass this into the shader?
       //diffuse = new Vector3([0,0,0]);
-      colors[i] =   diffuse.elements[0];
-      colors[i+1] = diffuse.elements[1];
-      colors[i+2] = diffuse.elements[2];
+      colors[i] =   finalColor.elements[0];
+      colors[i+1] = finalColor.elements[1];
+      colors[i+2] = finalColor.elements[2];
       numberOfColors+=3;
     }
+} 
+function dotProduct(vec1,vec2){
+  var dot;
+  dot=(vec1.elements[0]*vec2.elements[0])+(vec1.elements[1]*vec2.elements[1])+(vec1.elements[2]*vec2.elements[2]);
+  return dot;
 }
+function magnitude(sumVec){
+  var mag = new Vector3();
+  //square every element
+  mag.elements[0] = sumVec.elements[0] * sumVec.elements[0];
+  mag.elements[1] = sumVec.elements[1] * sumVec.elements[1];
+  mag.elements[2] = sumVec.elements[2] * sumVec.elements[2];
+  var sqrt = Math.sqrt(mag.elements[0] + mag.elements[1] + mag.elements[2]);
+  return sqrt;
+}
+function vector3Divide(vec1,scalar){
+  var divisor = new Vector3();
+  divisor.elements[0] = vec1.elements[0] / scalar;
+  divisor.elements[1] = vec1.elements[1] / scalar;
+  divisor.elements[2] = vec1.elements[2] / scalar;
+  return divisor;
+}
+function vector3Addition(vec1,vec2){
+  var sum = new Vector3();
+  sum.elements[0] = vec1.elements[0] + vec2.elements[0];
+  sum.elements[1] = vec1.elements[1] + vec2.elements[1];
+  sum.elements[2] = vec1.elements[2] + vec2.elements[2];
+  return sum;
+}
+function halfwayVector(){
+  var halfwayN;
+  var LV=vector3Addition(lightDirection,new Vector3([0,0,1]));
+  var magLV=magnitude(LV);
+  halfwayN=vector3Divide(LV,magLV);
+  return halfwayN;
+}
+function vector3Multiply(vec1,vec2){
+  var mag = new Vector3();
+  //square every element
+  mag.elements[0] = vec1.elements[0] * vec2.elements[0];
+  mag.elements[1] = vec1.elements[1] * vec2.elements[1];
+  mag.elements[2] = vec1.elements[2] * vec2.elements[2];
+  return mag;
+}
+
 function bufferHandling(){
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
@@ -690,7 +764,6 @@ function smoothCriminal(startPointIndex){
   //72-108-144
   for(i=startPointIndex+72;i<startPointIndex+108;i+=3){
     var avgNormal = new Vector3([0,0,0]);
-
     avgNormal.elements[0] = (normals[i    ] + normals[i + 36    ]) / 2;
     avgNormal.elements[1] = (normals[i + 1] + normals[i + 36 + 1]) / 2;
     avgNormal.elements[2] = (normals[i + 2] + normals[i + 36 + 2]) / 2;
@@ -731,6 +804,7 @@ function smoothShading(){
   }
   numOfVertsC=temp;
   bufferHandling();
+  mode=false;
 }
 function loading(){
     var tempIndex=numOfIndex;
@@ -757,6 +831,7 @@ function loading(){
       console.log(numOfIndex);
       calculateLighting();
     }
+    mode=true;
 }
 //reads the data from the saved SOR file and fills the arrays for drawing
 function readSOR(){
