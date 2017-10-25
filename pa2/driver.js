@@ -527,7 +527,7 @@ function calculateSurfaceNormals(vec1,normal,index,flipFlop){
       surfaceNormals[numOfSurfaceNormals+1]=vec1.elements[1]/2 + cVert[((index) * 3) + 1] + normal.elements[1] * .1;
       surfaceNormals[numOfSurfaceNormals+2]=vec1.elements[2]/2 + cVert[((index) * 3) + 2] + normal.elements[2] * .1;
       numOfSurfaceNormals+=3;
-      console.log(normal.elements[0]+", "+normal.elements[1]+", "+normal.elements[2]);
+      //console.log(normal.elements[0]+", "+normal.elements[1]+", "+normal.elements[2]);
   }else{
       surfaceNormals[numOfSurfaceNormals]=vec1.elements[0]/2 + cVert[(index+12) * 3];
       surfaceNormals[numOfSurfaceNormals+1]=vec1.elements[1]/2 + cVert[((index+12) * 3) + 1];
@@ -538,7 +538,7 @@ function calculateSurfaceNormals(vec1,normal,index,flipFlop){
       surfaceNormals[numOfSurfaceNormals+1]=vec1.elements[1]/2 + cVert[((index+12) * 3) + 1] + normal.elements[1] * .1;
       surfaceNormals[numOfSurfaceNormals+2]=vec1.elements[2]/2 + cVert[((index+12) * 3) + 2] + normal.elements[2] * .1;
       numOfSurfaceNormals+=3;
-      console.log(vec1.elements[0]+", "+vec1.elements[1]+", "+vec1.elements[2]);
+     // console.log(vec1.elements[0]+", "+vec1.elements[1]+", "+vec1.elements[2]);
   }
 
 }
@@ -673,47 +673,63 @@ function smoothCriminal(startPointIndex){
   for(i=startPointIndex;i<startPointIndex+36;i+=3){
     var avgNormal = new Vector3([0,0,0]);
 
-    avgNormal.elements[0] = (normals[i]     + normals[i + 36    ]) / 2;
+    avgNormal.elements[0] = (normals[i    ] + normals[i + 36    ]) / 2;
     avgNormal.elements[1] = (normals[i + 1] + normals[i + 36 + 1]) / 2;
     avgNormal.elements[2] = (normals[i + 2] + normals[i + 36 + 2]) / 2;
 
     normals[i    ] = avgNormal.elements[0];
     normals[i + 1] = avgNormal.elements[1];
     normals[i + 2] = avgNormal.elements[2];
-
+    //duplicate
     normals[i + 36    ] = avgNormal.elements[0];
     normals[i + 36 + 1] = avgNormal.elements[1];
     normals[i + 36 + 2] = avgNormal.elements[2];
-    console.log("FIRSTCIRCLE: " + i + ", " + (i + 36));
+    console.log(i+", "+(i+36));
   }
   //second circle
   //72-108-144
   for(i=startPointIndex+72;i<startPointIndex+108;i+=3){
     var avgNormal = new Vector3([0,0,0]);
 
-    avgNormal.elements[0] = (normals[i]     + normals[i + 36    ]) / 2;
+    avgNormal.elements[0] = (normals[i    ] + normals[i + 36    ]) / 2;
     avgNormal.elements[1] = (normals[i + 1] + normals[i + 36 + 1]) / 2;
     avgNormal.elements[2] = (normals[i + 2] + normals[i + 36 + 2]) / 2;
 
     normals[i    ] = avgNormal.elements[0];
     normals[i + 1] = avgNormal.elements[1];
     normals[i + 2] = avgNormal.elements[2];
-
+    //duplicate
     normals[i + 36    ] = avgNormal.elements[0];
     normals[i + 36 + 1] = avgNormal.elements[1];
     normals[i + 36 + 2] = avgNormal.elements[2];
-    console.log("SECONDCIRCLEf: " + i + ", " + (i + 36));
+    console.log(i+", "+(i+36));
+  }
+  //printNormals();
+}
+function printNormals(){
+  var index=0;
+  for(i=0;i<numOfVertsC;i+=3){
+
+    console.log("NORMALS "+(index)+": "+normals[i]+", "+normals[i+1]+", "+normals[i+2]);
+    index++;
+    //console.log(numOfVertsC);
   }
 }
 //sets it to smoothshading and changes the normals
 function smoothShading(){
   //first circle
-  smoothCriminal(0); 
-  //smoothCriminal(144); 
-  //smoothCriminal(144);
-  //lighting
-  //calculateSurfaceNormals();
-  calculateLighting();
+  var num=numOfVertsC/144;//number of different cylinders
+  var temp=numOfVertsC;//stores the value
+  numOfVertsC=0;
+  var n=0;
+  //for loop works
+  for(n;n<num;n++){
+    smoothCriminal(n*144);
+    console.log((n*144));
+    numOfVertsC+=144;
+    calculateLighting();
+  }
+  numOfVertsC=temp;
   bufferHandling();
 }
 function loading(){
