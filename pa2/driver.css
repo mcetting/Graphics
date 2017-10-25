@@ -29,8 +29,12 @@ body{
 button.button{
 	margin-top: 10px;
 }
-#slider{
+.slider{
 	width:500px;
+	opacity: .5;
+}
+.slider:hover{
+	opacity: 1;
 }
 #fileName{
 	background-color: white;

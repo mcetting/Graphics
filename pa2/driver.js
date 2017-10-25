@@ -64,7 +64,7 @@ var numOfSurfaceNormals=0;
 //gl reference
 var gl;
 //misc
-var radius=.05;
+var radius=.2;
 var debug=false;
 var enableMove=true;
 var perspectiveBool=false;
@@ -203,6 +203,7 @@ function duplicateVerts(rotMatrix,point){
       numOfVertsC+=3;
     }
 }
+
 //get a start and an end point then generate based on them
 function drawCircle(gl){
   //stores the data for the first and second point of the cylynders base
@@ -318,10 +319,6 @@ function endNormals(index){
     normal.normalize();
     //store it in the normals array
     console.log(normal.elements[0]+", "+normal.elements[1]+", "+normal.elements[2]);
-    /*
-    normal.elements[0]=Math.abs(normal.elements[0]);
-    normal.elements[1]=Math.abs(normal.elements[1]);
-    normal.elements[2]=Math.abs(normal.elements[2]);*/
     calculateSurfaceNormals(vec1, normal,index,false);
     //problem with the end point normal solved by taking the absolute value
     normals[(index+12)*3]=(normal.elements[0]);
@@ -627,7 +624,6 @@ function newColor(){
   bufferHandling();
 }
 function changeBackground(){
-
   gl.clearColor(Math.floor(Math.random()*100)/100,
          Math.floor(Math.random()*100)/100,
          Math.floor(Math.random()*100)/100,
@@ -652,15 +648,73 @@ function click(ev, gl, canvas, a_Position) {
       if(numOfVerts>3){
          drawCircle(gl);
       }
-    }else if(ev.button==2){
-      enableMove=false;
-    }
       numOfVerts+=3;
       lineVert[numOfVerts-3]=x;
       lineVert[numOfVerts-2]=y;
       lineVert[numOfVerts-1]=z
+    }else if(ev.button==2){
+      enableMove=false;
+      numOfVerts+=3;
+      lineVert[numOfVerts-3]=x;
+      lineVert[numOfVerts-2]=y;
+      lineVert[numOfVerts-1]=z;
+      drawCircle(gl);
+    }
       //adds another vertex at the same spot but doesnt use it for circle calc for rubberbanding
   }
+}
+function flatShading(){
+  loading();
+  bufferHandling();
+}
+function smoothCriminal(startPointIndex){
+  //first circle
+  //0-36-72
+  for(i=startPointIndex;i<startPointIndex+36;i+=3){
+    var avgNormal = new Vector3([0,0,0]);
+
+    avgNormal.elements[0] = (normals[i]     + normals[i + 36    ]) / 2;
+    avgNormal.elements[1] = (normals[i + 1] + normals[i + 36 + 1]) / 2;
+    avgNormal.elements[2] = (normals[i + 2] + normals[i + 36 + 2]) / 2;
+
+    normals[i    ] = avgNormal.elements[0];
+    normals[i + 1] = avgNormal.elements[1];
+    normals[i + 2] = avgNormal.elements[2];
+
+    normals[i + 36    ] = avgNormal.elements[0];
+    normals[i + 36 + 1] = avgNormal.elements[1];
+    normals[i + 36 + 2] = avgNormal.elements[2];
+    console.log("FIRSTCIRCLE: " + i + ", " + (i + 36));
+  }
+  //second circle
+  //72-108-144
+  for(i=startPointIndex+72;i<startPointIndex+108;i+=3){
+    var avgNormal = new Vector3([0,0,0]);
+
+    avgNormal.elements[0] = (normals[i]     + normals[i + 36    ]) / 2;
+    avgNormal.elements[1] = (normals[i + 1] + normals[i + 36 + 1]) / 2;
+    avgNormal.elements[2] = (normals[i + 2] + normals[i + 36 + 2]) / 2;
+
+    normals[i    ] = avgNormal.elements[0];
+    normals[i + 1] = avgNormal.elements[1];
+    normals[i + 2] = avgNormal.elements[2];
+
+    normals[i + 36    ] = avgNormal.elements[0];
+    normals[i + 36 + 1] = avgNormal.elements[1];
+    normals[i + 36 + 2] = avgNormal.elements[2];
+    console.log("SECONDCIRCLEf: " + i + ", " + (i + 36));
+  }
+}
+//sets it to smoothshading and changes the normals
+function smoothShading(){
+  //first circle
+  smoothCriminal(0); 
+  //smoothCriminal(144); 
+  //smoothCriminal(144);
+  //lighting
+  //calculateSurfaceNormals();
+  calculateLighting();
+  bufferHandling();
 }
 function loading(){
     var tempIndex=numOfIndex;
