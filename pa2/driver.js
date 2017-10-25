@@ -31,7 +31,7 @@ var FSHADER_SOURCE =
   '  gl_FragColor = vec4(v_Color.rgb,1);\n' +
   '}\n';
 //global lighting variables
-var gloss=5;
+var gloss=1;
 var lightDirection = new Vector3([1,1,1]);
 var specularColor = new Vector3([0,1,0])
 var lightColor = new Vector3([1,1,1]);
@@ -75,9 +75,36 @@ var u_MvpMatrix;
 var mvpMatrix;
 var slider;
 var mode=true;
+var angle=10;
+var globalPos=new Vector3([0,0,5]);
 //main function
 //overright
 function main() {
+  document.onkeydown = function(ev){
+    if(ev.keyCode==65){
+      //A
+      var mat=new Matrix4();
+      mat.setRotate(-angle,0,1,0);
+      globalPos=mat.multiplyVector3(globalPos);
+      mvpMatrix.setPerspective(30,1,1,100);
+      mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
+      gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
+      bufferHandling();
+    }else if(ev.keyCode==68){
+      var mat=new Matrix4();
+
+      mat.setRotate(angle,0,1,0);
+      globalPos=mat.multiplyVector3(globalPos);
+      mvpMatrix.setPerspective(30,1,1,100);
+      mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
+      gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
+      bufferHandling();
+    }
+  }
+
+
+
+
   slider=document.getElementById("sliderValue");
   slider.oninput = function(){
     gloss = this.value;
@@ -86,7 +113,7 @@ function main() {
       loading();
       bufferHandling();
     }else{
-      smoothshading();
+      smoothShading();
     }
   }
   setupIOSOR("fileName");
