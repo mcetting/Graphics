@@ -250,6 +250,7 @@ function duplicateVerts(rotMatrix,point){
 //get a start and an end point then generate based on them
 function drawCircle(gl){
   //stores the data for the first and second point of the cylynders base
+  
   if(!debug){
     var frontPoint={
       x:lineVert[numOfVerts-9],
@@ -273,7 +274,7 @@ function drawCircle(gl){
     duplicateVerts(rotMatrix,frontPoint);//36
     duplicateVerts(rotMatrix,frontPoint);//36-72
     if(numOfCyl>0){
-      calculateIndicies();
+      transitionTest();//calculateIndicies();//the transitions fuck up everything
     }
 
     duplicateVerts(rotMatrix,backPoint);//144
@@ -283,9 +284,63 @@ function drawCircle(gl){
 
     calculateLighting();
     bufferHandling();
-
+    console.log(numOfNormals);
     //debugPrint();
   }
+}
+function transitionTest(){
+  var index = numOfVertsC/3 - 48;
+  console.log("GIMME MY INDEX: "+index);
+  var p = numOfIndex;
+  var flipFlop=false;
+  for(i=0;i<66;i+=6){
+    if(!flipFlop){
+      //triangle 1
+      indices[i+p] =   index;
+      indices[i+p+1] = index + 24 + 1;
+      indices[i+p+2] = index + 24;
+      //calculate the normal
+
+      //triangle 2
+      indices[i+p+3] = index;
+      indices[i+p+4] = index + 1;
+      indices[i+p+5] = index + 24 + 1;
+      //normalCalculation(index,true);
+    }else{
+      //triangle 1
+      indices[i+p] =   index + 12;
+      indices[i+p+1] = index + 24 + 1 + 12;
+      indices[i+p+2] = index + 24 + 12;
+      //calculate the normal
+      //triangle 2
+      indices[i+p+3] = index + 12;
+      indices[i+p+4] = index + 1 + 12;
+      indices[i+p+5] = index + 24 + 1 + 12;
+      //the problem lies within
+      //normalCalculation(index, false);
+
+    }
+    if(flipFlop){
+      flipFlop =false;
+    }else{
+      flipFlop = true;
+    }
+    index++;
+    numOfIndex+=6;
+    //then do it in reverse
+  }
+  indices[i+p] =   index+12;
+  indices[i+p+1] = numOfVertsC/3 - 12;
+  indices[i+p+2] = index+36;
+  //also causing problems
+  //endNormals(index);
+  
+  indices[i+p+3] = index+12;
+  indices[i+p+4] = numOfVertsC/3 - 36;//48-48=0+12=12->0
+  indices[i+p+5] = numOfVertsC/3 - 12;//24
+
+  numOfIndex+=6;
+  numOfCyl++;
 }
 function calculateIndicies(){
     var index = numOfVertsC/3 - 48;
@@ -315,6 +370,7 @@ function calculateIndicies(){
         indices[i+p+3] = index + 12;
         indices[i+p+4] = index + 1 + 12;
         indices[i+p+5] = index + 24 + 1 + 12;
+        //the problem lies within
         normalCalculation(index, false);
 
       }
@@ -330,7 +386,7 @@ function calculateIndicies(){
     indices[i+p] =   index+12;
     indices[i+p+1] = numOfVertsC/3 - 12;
     indices[i+p+2] = index+36;
-
+    //also causing problems
     endNormals(index);
     
     indices[i+p+3] = index+12;
@@ -364,6 +420,7 @@ function endNormals(index){
     console.log(normal.elements[0]+", "+normal.elements[1]+", "+normal.elements[2]);
     calculateSurfaceNormals(vec1, normal,index,false);
     //problem with the end point normal solved by taking the absolute value
+    console.log(((index+12)*3));
     normals[(index+12)*3]=(normal.elements[0]);
     normals[(index+12)*3 + 1]=(normal.elements[1]);
     normals[(index+12)*3 + 2]=(normal.elements[2]);
@@ -379,6 +436,7 @@ function endNormals(index){
     normals[numOfVertsC-36]=(normal.elements[0]);
     normals[numOfVertsC-36 + 1]=(normal.elements[1]);
     normals[numOfVertsC-36 + 2]=(normal.elements[2]);
+    numOfNormals+=4;
 }
 function displayNormals(){
   if(displayN){
@@ -408,7 +466,7 @@ function calculateLighting(){
       //calculate the lighting
       var diffuse = new Vector3();
       //color=color.normalize();
-      lightColor=lightColor.normalize();
+     // lightColor=lightColor.normalize();
       //do the multiplication manually?
       //take the cross product?
       diffuse.elements[0] = lightColor.elements[0] * color.elements[0];
@@ -425,6 +483,10 @@ function calculateLighting(){
       var light=vector3Multiply(specularColor,lightColor);
       var nDotH=dotProduct(temp,halfwayNormal);
       var spec=new Vector3();
+      if(nDotH<0){
+        nDotH=0;
+        //console.log(nDotH);
+      }
 
       spec.elements[0] = light.elements[0] * Math.pow(nDotH,gloss);
       spec.elements[1] = light.elements[1] * Math.pow(nDotH,gloss);
@@ -544,6 +606,7 @@ function debugPrint(){
   console.log("NUMBEROFNORMALS: "+numOfNormals);
   console.log("NUMBEROFCOLORS: "+numberOfColors);
 }
+//--------------------------------------------------------------------------------------THE PROBLEM
 function normalCalculation(index, flipFlop){
     var normal=new Vector3();
     var vec1=new Vector3();
@@ -567,6 +630,7 @@ function normalCalculation(index, flipFlop){
       calculateSurfaceNormals(vec1,normal,index,true);
 
       //store it in the normals array
+      console.log(index*3);
       normals[(index)*3]=normal.elements[0];
       normals[(index)*3+1]=normal.elements[1];
       normals[(index)*3+2]=normal.elements[2];
@@ -582,6 +646,7 @@ function normalCalculation(index, flipFlop){
       normals[(index+25)*3]=normal.elements[0];
       normals[(index+25)*3+1]=normal.elements[1];
       normals[(index+25)*3+2]=normal.elements[2];
+      numOfNormals+=4;
     }else {
       //flop
       vec1.elements[0]=cVert[(index + 25 + 12)  * 3]-cVert[(index + 12) * 3];
@@ -596,9 +661,9 @@ function normalCalculation(index, flipFlop){
       normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
       normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
       normal.normalize();
-      calculateSurfaceNormals(vec1,normal,index,false);
+      calculateSurfaceNormals(vec1,normal,index,false);//fine
       //store it in the normals array
-      normals[(index + 12)*3]=normal.elements[0];
+      normals[(index + 12)*3]=normal.elements[0];//all fine
       normals[(index + 12)*3+1]=normal.elements[1];
       normals[(index + 12)*3+2]=normal.elements[2];
       //duplicate the normal for the same face
@@ -613,10 +678,12 @@ function normalCalculation(index, flipFlop){
       normals[(index+24 + 12+1)*3]=normal.elements[0];
       normals[(index+24 + 12+1)*3+1]=normal.elements[1];
       normals[(index+24 + 12+1)*3+2]=normal.elements[2];
+      numOfNormals+=4;
     }
 
 
 }
+//---------------------------------------------------------------------------------------------------------THE PROBLEM
 function calculateSurfaceNormals(vec1,normal,index,flipFlop){
   if(flipFlop){
       surfaceNormals[numOfSurfaceNormals]=vec1.elements[0]/2 + cVert[(index) * 3];
@@ -714,9 +781,9 @@ function newColor(){
     colorIndex=0;
   }
   if(colorIndex==0){
-    color=new Vector3([0,1,0]);
-  }else if(colorIndex==1){
     color=new Vector3([1,0,0]);
+  }else if(colorIndex==1){
+    color=new Vector3([0,1,0]);
   }else{
     color=new Vector3([0,0,1]);
   }
@@ -768,6 +835,7 @@ function flatShading(){
   loading();
   bufferHandling();
 }
+
 function smoothCriminal(startPointIndex){
   //first circle
   //0-36-72
@@ -777,6 +845,7 @@ function smoothCriminal(startPointIndex){
     avgNormal.elements[0] = (normals[i    ] + normals[i + 36    ]) / 2;
     avgNormal.elements[1] = (normals[i + 1] + normals[i + 36 + 1]) / 2;
     avgNormal.elements[2] = (normals[i + 2] + normals[i + 36 + 2]) / 2;
+    //console.log();
 
     normals[i    ] = avgNormal.elements[0];
     normals[i + 1] = avgNormal.elements[1];
@@ -785,7 +854,7 @@ function smoothCriminal(startPointIndex){
     normals[i + 36    ] = avgNormal.elements[0];
     normals[i + 36 + 1] = avgNormal.elements[1];
     normals[i + 36 + 2] = avgNormal.elements[2];
-    console.log(i+", "+(i+36));
+    //console.log(i+", "+(i+36));
   }
   //second circle
   //72-108-144
@@ -802,7 +871,7 @@ function smoothCriminal(startPointIndex){
     normals[i + 36    ] = avgNormal.elements[0];
     normals[i + 36 + 1] = avgNormal.elements[1];
     normals[i + 36 + 2] = avgNormal.elements[2];
-    console.log(i+", "+(i+36));
+    //console.log(i+", "+(i+36));
   }
   //printNormals();
 }
@@ -825,7 +894,7 @@ function smoothShading(){
   //for loop works
   for(n;n<num;n++){
     smoothCriminal(n*144);
-    console.log((n*144));
+    //console.log((n*144));
     numOfVertsC+=144;
     calculateLighting();
   }
@@ -854,8 +923,8 @@ function loading(){
 
       calculateIndicies();
 
-      console.log(numOfVertsC);
-      console.log(numOfIndex);
+      //console.log(numOfVertsC);
+      //console.log(numOfIndex);
       calculateLighting();
     }
     mode=true;
