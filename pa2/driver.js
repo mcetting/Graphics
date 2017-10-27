@@ -1,11 +1,11 @@
 // Vertex shader program
 var VSHADER_SOURCE =
-  'attribute vec4 a_Position;\n' +
+  'attribute vec4 a_Position;\n' +//arrays for each vertex
   'attribute vec4 b_Position;\n' +
   'attribute vec4 surfaceNormal_Position;\n' +
   'attribute vec4 a_Color;\n' +
   'attribute vec4 a_Normal;\n' +
-  'uniform mat4 u_MvpMatrix;\n' +
+  'uniform mat4 u_MvpMatrix;\n' + //element for each vertex
   'uniform int doIt;\n' +
   'varying vec4 v_Color;\n' +
   'void main() {\n' +
@@ -54,6 +54,7 @@ var normalBuffer;
 var a_Position;
 var a_Color;
 var b_Position;
+var uniformGPos;
 var surfaceNormal_Position;
 var boolio;
 //itterators
@@ -89,6 +90,7 @@ function main() {
       mvpMatrix.setPerspective(30,1,1,100);
       mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
       gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
+      smoothShading();
       bufferHandling();
     }else if(ev.keyCode==68){
       //D
@@ -98,6 +100,7 @@ function main() {
       mvpMatrix.setPerspective(30,1,1,100);
       mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
       gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
+      smoothShading();
       bufferHandling();
     }
   }
@@ -125,11 +128,13 @@ function main() {
     console.log('Failed to get the rendering context for WebGL');
     return;
   }
+
   // Initialize shaders
   if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) {
     console.log('Failed to intialize shaders.');
     return;
   }
+
   // Set the vertex coordinates and color
   var n = initVertexBuffers(gl);
   if (n < 0) {
@@ -534,7 +539,7 @@ function vector3Addition(vec1,vec2){
 }
 function halfwayVector(){
   var halfwayN;
-  var LV=vector3Addition(lightDirection,new Vector3([0,0,1]));
+  var LV=vector3Addition(lightDirection,globalPos);
   var magLV=magnitude(LV);
   halfwayN=vector3Divide(LV,magLV);
   return halfwayN;
