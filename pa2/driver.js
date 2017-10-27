@@ -890,6 +890,7 @@ function printNormals(){
   }
 }
 //sets it to smoothshading and changes the normals
+//breaks when reloading flat then choosing smooth again
 function smoothShading(){
   //first circle
   var num=numOfVertsC/144;//number of different cylinders
@@ -921,7 +922,7 @@ function loading(){
     while(numOfIndex<tempIndex){
       numOfVertsC+=72;
       if(numOfCyl>0){
-          calculateIndicies();
+          transitionTest();
       }
       numOfCyl++;
       numOfVertsC+=72;
