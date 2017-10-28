@@ -289,13 +289,13 @@ function drawCircle(gl){
 
     calculateLighting();
     bufferHandling();
-    console.log(numOfNormals);
+    //console.log(numOfNormals);
     //debugPrint();
   }
 }
 function transitionTest(){
   var index = numOfVertsC/3 - 48;
-  console.log("GIMME MY INDEX: "+index);
+  //console.log("GIMME MY INDEX: "+index);
   var p = numOfIndex;
   var flipFlop=false;
   for(i=0;i<66;i+=6){
@@ -349,7 +349,7 @@ function transitionTest(){
 }
 function calculateIndicies(){
     var index = numOfVertsC/3 - 48;
-    console.log("GIMME MY INDEX: "+index);
+    //console.log("GIMME MY INDEX: "+index);
     var p = numOfIndex;
     var flipFlop=false;
     for(i=0;i<66;i+=6){
@@ -415,17 +415,17 @@ function endNormals(index){
     vec2.elements[0]=cVert[(index+36)*3]-cVert[(numOfVertsC-36)];
     vec2.elements[1]=cVert[((index+36)*3)+1]-cVert[(numOfVertsC-36)+1];
     vec2.elements[2]=cVert[((index+36)*3)+2]-cVert[(numOfVertsC-36)+2];
-    console.log("index: "+index+" numOfVertsC: "+numOfVertsC);
+    //console.log("index: "+index+" numOfVertsC: "+numOfVertsC);
     //do the cross product to make the normal of the first triangle
     normal.elements[0] = vec1.elements[1] * vec2.elements[2] - vec1.elements[2] * vec2.elements[1];
     normal.elements[1] = vec1.elements[2] * vec2.elements[0] - vec1.elements[0] * vec2.elements[2];
     normal.elements[2] = vec1.elements[0] * vec2.elements[1] - vec1.elements[1] * vec2.elements[0];
     normal.normalize();
     //store it in the normals array
-    console.log(normal.elements[0]+", "+normal.elements[1]+", "+normal.elements[2]);
+    //console.log(normal.elements[0]+", "+normal.elements[1]+", "+normal.elements[2]);
     calculateSurfaceNormals(vec1, normal,index,false);
     //problem with the end point normal solved by taking the absolute value
-    console.log(((index+12)*3));
+    //console.log(((index+12)*3));
     normals[(index+12)*3]=(normal.elements[0]);
     normals[(index+12)*3 + 1]=(normal.elements[1]);
     normals[(index+12)*3 + 2]=(normal.elements[2]);
@@ -492,10 +492,15 @@ function calculateLighting(){
         nDotH=0;
         //console.log(nDotH);
       }
+      if(nDotL>0){
 
+      }
       spec.elements[0] = light.elements[0] * Math.pow(nDotH,gloss);
       spec.elements[1] = light.elements[1] * Math.pow(nDotH,gloss);
       spec.elements[2] = light.elements[2] * Math.pow(nDotH,gloss);
+      if(nDotL<0){
+        
+      }
       //add a final .2 to the blue for ambient lskjdgkfh
       var finalColor=new Vector3([0,0,0]);
       finalColor.elements[0] = diffuse.elements[0];
@@ -506,7 +511,7 @@ function calculateLighting(){
       colors[i] =   finalColor.elements[0];
       colors[i+1] = finalColor.elements[1];
       colors[i+2] = finalColor.elements[2];
-      numberOfColors+=3;
+      //numberOfColors+=3;
     }
 } 
 function dotProduct(vec1,vec2){
@@ -603,7 +608,7 @@ function bufferHandling(){
     gl.enableVertexAttribArray(b_Position); 
 
     var d=0;
-    debugPrint();
+    //debugPrint();
 }
 function debugPrint(){
   console.log("NUMBEROFVERTS: "+numOfVertsC);
@@ -635,7 +640,7 @@ function normalCalculation(index, flipFlop){
       calculateSurfaceNormals(vec1,normal,index,true);
 
       //store it in the normals array
-      console.log(index*3);
+      //console.log(index*3);
       normals[(index)*3]=normal.elements[0];
       normals[(index)*3+1]=normal.elements[1];
       normals[(index)*3+2]=normal.elements[2];
@@ -833,7 +838,12 @@ function click(ev, gl, canvas, a_Position) {
       lineVert[numOfVerts-1]=z;
       drawCircle(gl);
     }
+    if(mode==true){
+      flatShading();
       //adds another vertex at the same spot but doesnt use it for circle calc for rubberbanding
+    }else{
+      smoothShading();
+    }
   }
 }
 function flatShading(){
@@ -934,6 +944,15 @@ function loading(){
       calculateLighting();
     }
     mode=true;
+}
+function toggleShading(){
+  if(mode==true){
+    //smooth it
+    smoothShading();
+  }else{
+    //flat it
+    flatShading();
+  }
 }
 //reads the data from the saved SOR file and fills the arrays for drawing
 function readSOR(){
