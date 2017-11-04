@@ -1,37 +1,55 @@
 // Vertex shader program
-var VSHADER_SOURCE =
-  'attribute vec4 a_Position;\n' +//arrays for each vertex
-  'attribute vec4 b_Position;\n' +
-  'attribute vec4 surfaceNormal_Position;\n' +
-  'attribute vec4 a_Color;\n' +
-  'attribute vec4 a_Normal;\n' +
-  'uniform mat4 u_MvpMatrix;\n' + //element for each vertex
-  'uniform int doIt;\n' +
-  'varying vec4 v_Color;\n' +
-  'void main() {\n' +
-  '  if(doIt==1){' +
-  '      gl_Position=u_MvpMatrix*b_Position;\n' +
-  '      v_Color = vec4(0,0,0,1);\n' +
-  '  }else if(doIt==0){\n' +
-  '      gl_Position = u_MvpMatrix * a_Position;\n' +
-  '      v_Color = a_Color;\n' +
-  '  }else{\n' +
-  '      gl_Position=u_MvpMatrix*surfaceNormal_Position;\n' +
-  '      v_Color = vec4(1,0,0,1);\n' +
-  '  }\n' +
-  '}\n';
+var VSHADER_SOURCE = `
+  attribute vec4 a_Position;
+  attribute vec4 b_Position;
+  attribute vec4 surfaceNormal_Position;
+  attribute vec4 a_Color;
+  attribute vec4 a_Normal;
+  attribute vec4 directionalLight_Position;
+  uniform mat4 u_MvpMatrix;
+  uniform int doIt;
+  uniform bool clicked;
+  varying vec4 v_Color;
+  void main() {
+    if(doIt==1){
+        gl_Position=u_MvpMatrix*b_Position;
+        v_Color = vec4(0,0,0,1);
+    }else if(doIt==0){
+        gl_Position = u_MvpMatrix * a_Position;
+        if(clicked){
+           v_Color = a_Color;
+        }else{
+           v_Color = vec4(1,0,0,255);
+        }
+    }else if(doIt==2){
+        gl_Position=u_MvpMatrix*surfaceNormal_Position;
+        v_Color = vec4(1,0,0,1);
+    }else if(doIt==3){
+      //if3
+      gl_Position=u_MvpMatrix*directionalLight_Position;
+      v_Color=vec4(1,0,0,1);
+    }
+  }`;
 
 // Fragment shader program
-var FSHADER_SOURCE =
-  '#ifdef GL_ES\n' +
-  'precision mediump float;\n' +
-  '#endif\n' +
-  'varying vec4 v_Color;\n' +
-  'void main() {\n' +
-  '  gl_FragColor = vec4(v_Color.rgb,1);\n' +
-  '}\n';
+var FSHADER_SOURCE = `
+  #ifdef GL_ES
+  precision mediump float;
+  #endif
+  uniform int objectIndex;
+  varying vec4 v_Color;
+  void main() {
+    if(objectIndex==0){
+        gl_FragColor = vec4(v_Color.rgb,1);
+    }else if(objectIndex==1){
+        gl_FragColor = vec4(v_Color.rgb,.99);
+    }
+
+  }`;
 //global lighting variables
 var gloss=1;
+var secondLightPosition = new Vector3([0,1,0]);
+var secondLightColor = new Vector3([1,1,0]);
 var lightDirection = new Vector3([1,1,1]);
 var specularColor = new Vector3([0,1,0])
 var lightColor = new Vector3([1,1,1]);
@@ -39,6 +57,10 @@ var color = new Vector3([1,0,0]);
 //array allocation
 var vertices = new Float32Array(5000);
 var cVert = new Float32Array(5000);
+
+var dirVert = new Float32Array(100);
+var dirIndices = new Uint16Array(2);
+
 var lineVert= new Float32Array(5000);
 var indices = new Uint16Array(5000);
 var normals = new Float32Array(5000);
@@ -55,8 +77,11 @@ var a_Position;
 var a_Color;
 var b_Position;
 var uniformGPos;
+var uniformObjectIndex;
 var surfaceNormal_Position;
+var directionalLight_Position;
 var boolio;
+var clicked;
 //itterators
 var numOfIndex=0;
 var numOfCyl=0;
@@ -67,7 +92,7 @@ var numOfSurfaceNormals=0;
 //gl reference
 var gl;
 //misc
-var radius=.2;
+var radius=.05;
 var debug=false;
 var enableMove=true;
 var perspectiveBool=false;
@@ -75,23 +100,32 @@ var displayN = false;
 var u_MvpMatrix;
 var mvpMatrix;
 var slider;
+var radiusSlider;
 var mode=true;
+var specToggle=true;
 var angle=10;
 var globalPos=new Vector3([0,0,5]);
+var directionalLightBool=true;
 //main function
 //overright
 function main() {
+  //-----------------------------------------------
+  //ROTATION
   document.onkeydown = function(ev){
     if(ev.keyCode==65){
       //A
+      //figure you how to change the light direction for dynamic light
       var mat=new Matrix4();
       mat.setRotate(-angle,0,1,0);
       globalPos=mat.multiplyVector3(globalPos);
       mvpMatrix.setPerspective(30,1,1,100);
       mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
       gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
-      smoothShading();
-      bufferHandling();
+      if(!mode){
+        smoothShading();
+      }else{
+        flatShading();
+      }
     }else if(ev.keyCode==68){
       //D
       var mat=new Matrix4();
@@ -100,13 +134,14 @@ function main() {
       mvpMatrix.setPerspective(30,1,1,100);
       mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
       gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
-      smoothShading();
-      bufferHandling();
+      if(!mode){
+        smoothShading();
+      }else{
+        flatShading();
+      }
     }
   }
-
-
-
+  //-----------------------------------------------
 
   slider=document.getElementById("sliderValue");
   slider.oninput = function(){
@@ -119,11 +154,16 @@ function main() {
       smoothShading();
     }
   }
+  radiusSlider=document.getElementById("radiusSlider");
+  radiusSlider.oninput = function(){
+    radius = this.value;
+    //recalc the lighting
+  }
   setupIOSOR("fileName");
   // Retrieve <canvas> element
   var canvas = document.getElementById('webgl');
   // Get the rendering context for WebGL
-  gl = getWebGLContext(canvas);
+  gl = WebGLUtils.setupWebGL(canvas,{preserveDrawingBuffer: true});
   if (!gl) {
     console.log('Failed to get the rendering context for WebGL');
     return;
@@ -150,6 +190,12 @@ function main() {
   boolio = gl.getUniformLocation(gl.program, 'doIt');
   gl.uniform1i(boolio,0);//sets doIt in the shader
 
+  uniformObjectIndex = gl.getUniformLocation(gl.program, 'objectIndex');
+  gl.uniform1i(uniformObjectIndex,0);//sets doIt in the shader
+
+  clicked = gl.getUniformLocation(gl.program, 'clicked');
+  gl.uniform1i(clicked,1);//sets the default to normal draw
+
   gl.clearColor(.9, .9, .9, 1.0);
   gl.enable(gl.DEPTH_TEST);
   // Set the eye point and the viewing volume
@@ -163,6 +209,31 @@ function main() {
   canvas.onmousedown = function(ev){ click(ev, gl, canvas, a_Position); };
   canvas.onmousemove=function(ev){hover(ev,gl,canvas,a_Position);};
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  createDirectionLight();
+}
+var offset = .01;
+function createRect(){
+  dirVert[0]=-offset;
+  dirVert[1]=offset;
+  dirVert[2]=0;
+
+  dirVert[3]=offset;
+  dirVert[4]=-offset;
+  dirVert[5]=0;
+
+  dirVert[6]=1-offset;
+  dirVert[7]=1+offset;
+  dirVert[8]=1;
+
+  dirVert[9]=1+offset;
+  dirVert[10]=1-offset;
+  dirVert[11]=1;
+
+  bufferHandling();
+
+}
+function createDirectionLight(){
+  createRect();
 }
 function swapPersp(){
   if(perspectiveBool)
@@ -177,6 +248,7 @@ function swapPersp(){
   gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
   bufferHandling();
 }
+
 //indices form triangles
 function initVertexBuffers(gl) {
   //creates all 3 used buffers for drawing
@@ -185,6 +257,7 @@ function initVertexBuffers(gl) {
   lineBuffer = gl.createBuffer();
   colorBuffer = gl.createBuffer();
   normalBuffer = gl.createBuffer();
+  directionalBuffer=gl.createBuffer();
 
   var FSIZE = cVert.BYTES_PER_ELEMENT;
 
@@ -228,6 +301,16 @@ function initVertexBuffers(gl) {
   gl.vertexAttribPointer(surfaceNormal_Position, 3, gl.FLOAT, false, FSIZE * 3, 0);
   gl.enableVertexAttribArray(surfaceNormal_Position);
 
+  gl.bindBuffer(gl.ARRAY_BUFFER,directionalBuffer);
+  directionalLight_Position = gl.getAttribLocation(gl.program, 'directionalLight_Position');
+  if(directionalLight_Position < 0) {
+    console.log('Failed to get the storage location of directionalLight_Position');
+    return -1;
+  }
+  gl.vertexAttribPointer(directionalLight_Position, 3, gl.FLOAT, false, FSIZE * 3, 0);
+  gl.enableVertexAttribArray(directionalLight_Position);
+  gl.disableVertexAttribArray(directionalLight_Position);
+
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 
@@ -255,43 +338,41 @@ function duplicateVerts(rotMatrix,point){
 //get a start and an end point then generate based on them
 function drawCircle(gl){
   //stores the data for the first and second point of the cylynders base
-  
-  if(!debug){
-    var frontPoint={
-      x:lineVert[numOfVerts-9],
-      y:lineVert[numOfVerts-8]
-    }
-    var backPoint={
-      x:lineVert[numOfVerts-6],
-      y:lineVert[numOfVerts-5]
-    }
-    //creates the I matrix at 4x4
-    var rotMatrix=new Matrix4();
-    //gives the axis
-    var rot=new Vector3([backPoint.x-frontPoint.x,backPoint.y-frontPoint.y,0]);
-    //normalize it
-    rot=rot.normalize();
-    //makes its magnitude 1
-    //pass it the xyz of the normaized rotation axis
-    rotMatrix.setRotate(30,rot.elements[0],rot.elements[1],rot.elements[2]);
-    //point vector
-    
-    duplicateVerts(rotMatrix,frontPoint);//36
-    duplicateVerts(rotMatrix,frontPoint);//36-72
-    if(numOfCyl>0){
-      transitionTest();//calculateIndicies();//the transitions fuck up everything
-    }
-
-    duplicateVerts(rotMatrix,backPoint);//144
-    duplicateVerts(rotMatrix,backPoint);
-
-    calculateIndicies();
-
-    calculateLighting();
-    bufferHandling();
-    //console.log(numOfNormals);
-    //debugPrint();
+  var frontPoint={
+    x:lineVert[numOfVerts-9],
+    y:lineVert[numOfVerts-8]
   }
+  var backPoint={
+    x:lineVert[numOfVerts-6],
+    y:lineVert[numOfVerts-5]
+  }
+  //creates the I matrix at 4x4
+  var rotMatrix=new Matrix4();
+  //gives the axis
+  var rot=new Vector3([backPoint.x-frontPoint.x,backPoint.y-frontPoint.y,0]);
+  //normalize it
+  rot=rot.normalize();
+  //makes its magnitude 1
+  //pass it the xyz of the normaized rotation axis
+  rotMatrix.setRotate(30,rot.elements[0],rot.elements[1],rot.elements[2]);
+  //point vector
+  
+  duplicateVerts(rotMatrix,frontPoint);//36
+  duplicateVerts(rotMatrix,frontPoint);//36-72
+  if(numOfCyl>0){
+    transitionTest();//calculateIndicies();//the transitions fuck up everything
+  }
+
+  duplicateVerts(rotMatrix,backPoint);//144
+  duplicateVerts(rotMatrix,backPoint);
+
+  calculateIndicies();
+
+  calculateLighting();
+  bufferHandling();
+  //console.log(numOfNormals);
+  //debugPrint();
+  
 }
 function transitionTest(){
   var index = numOfVertsC/3 - 48;
@@ -453,6 +534,10 @@ function displayNormals(){
 }
 function calculateLighting(){
       //works for the irst cylyinder but not the following
+    if(!directionalLightBool){
+      colors=new Float32Array(5000);
+      return;
+    }
     var d=1;
     var p=numOfVertsC-144;//calculates for the last cyl only
     for(i=p;i<numOfVertsC;i+=3){
@@ -460,10 +545,24 @@ function calculateLighting(){
       temp.elements[0] = normals[i];
       temp.elements[1] = normals[i+1];
       temp.elements[2] = normals[i+2];
+
       temp=temp.normalize();
-      var nDotL = temp.elements[0] * lightDirection.elements[0] + 
-                  temp.elements[1] * lightDirection.elements[1] + 
-                  temp.elements[2] * lightDirection.elements[2];
+
+      var normalL= new Vector3();
+      normalL.elements[0]=lightDirection.elements[0];
+      normalL.elements[1]=lightDirection.elements[1];
+      normalL.elements[2]=lightDirection.elements[2];
+      normalL.normalize();
+
+      var globalPosNorm=new Vector3();
+      globalPosNorm.elements[0] = globalPos.elements[0];
+      globalPosNorm.elements[1] = globalPos.elements[1];
+      globalPosNorm.elements[2] = globalPos.elements[2];
+      globalPosNorm=globalPosNorm.normalize();
+
+      var nDotL = temp.elements[0] * normalL.elements[0] + 
+                  temp.elements[1] * normalL.elements[1] + 
+                  temp.elements[2] * normalL.elements[2];
       if(nDotL<0){
         nDotL=0;
       }
@@ -484,7 +583,7 @@ function calculateLighting(){
       //diffuse.elements=lightColor.elements * color.elements * nDotL;
       d++;
       //specular
-      var halfwayNormal=halfwayVector();
+      var halfwayNormal=halfwayVector(globalPosNorm);
       var light=vector3Multiply(specularColor,lightColor);
       var nDotH=dotProduct(temp,halfwayNormal);
       var spec=new Vector3();
@@ -492,28 +591,57 @@ function calculateLighting(){
         nDotH=0;
         //console.log(nDotH);
       }
-      if(nDotL>0){
-
-      }
       spec.elements[0] = light.elements[0] * Math.pow(nDotH,gloss);
       spec.elements[1] = light.elements[1] * Math.pow(nDotH,gloss);
       spec.elements[2] = light.elements[2] * Math.pow(nDotH,gloss);
-      if(nDotL<0){
-        
+      nDotL = temp.elements[0] * lightDirection.elements[0] + 
+              temp.elements[1] * lightDirection.elements[1] + 
+              temp.elements[2] * lightDirection.elements[2];
+      if(specToggle){
+        var finalColor=new Vector3([0,0,0]);
+        finalColor.elements[0] = diffuse.elements[0];
+        finalColor.elements[1] = spec.elements[1];
+        finalColor.elements[2] = .2;
+        //somehow pass this into the shader?
+        //diffuse = new Vector3([0,0,0]);
+        if(nDotL>=0){
+          colors[i] =   finalColor.elements[0];
+          colors[i+1] = finalColor.elements[1];
+          colors[i+2] = finalColor.elements[2];
+        }
+
+      }else{
+        //diffuse = new Vector3([0,0,0]);
+        if(nDotL>=0){
+          colors[i] =   diffuse.elements[0];
+          colors[i+1] = diffuse.elements[1];
+          colors[i+2] = diffuse.elements[2];
+        }
+
       }
       //add a final .2 to the blue for ambient lskjdgkfh
-      var finalColor=new Vector3([0,0,0]);
-      finalColor.elements[0] = diffuse.elements[0];
-      finalColor.elements[1] = spec.elements[1];
-      finalColor.elements[2] = .2;
-      //somehow pass this into the shader?
-      //diffuse = new Vector3([0,0,0]);
-      colors[i] =   finalColor.elements[0];
-      colors[i+1] = finalColor.elements[1];
-      colors[i+2] = finalColor.elements[2];
+
       //numberOfColors+=3;
     }
-} 
+}
+function toggleSpecular(){
+  if(specToggle){
+    specToggle=false;
+    //recalc lighting
+    if(!mode){
+      smoothShading();
+    }else{
+      flatShading();
+    }
+  }else{
+    specToggle=true;
+    if(!mode){
+      smoothShading();
+    }else{
+      flatShading();
+    }  
+  }
+}
 function dotProduct(vec1,vec2){
   var dot;
   dot=(vec1.elements[0]*vec2.elements[0])+(vec1.elements[1]*vec2.elements[1])+(vec1.elements[2]*vec2.elements[2]);
@@ -542,9 +670,9 @@ function vector3Addition(vec1,vec2){
   sum.elements[2] = vec1.elements[2] + vec2.elements[2];
   return sum;
 }
-function halfwayVector(){
+function halfwayVector(vec1){
   var halfwayN;
-  var LV=vector3Addition(lightDirection,globalPos);
+  var LV=vector3Addition(lightDirection,vec1);
   var magLV=magnitude(LV);
   halfwayN=vector3Divide(LV,magLV);
   return halfwayN;
@@ -559,10 +687,11 @@ function vector3Multiply(vec1,vec2){
 }
 
 function bufferHandling(){
+
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
     gl.disableVertexAttribArray(surfaceNormal_Position);
-
+    gl.disableVertexAttribArray(directionalLight_Position);
 
     gl.uniform1i(boolio,1);
     gl.bindBuffer(gl.ARRAY_BUFFER, lineBuffer);
@@ -597,6 +726,28 @@ function bufferHandling(){
       gl.enableVertexAttribArray(a_Color); 
       gl.uniform1i(boolio,0);
     }
+
+    gl.uniform1i(boolio,3);
+    gl.bindBuffer(gl.ARRAY_BUFFER, directionalBuffer);
+    gl.enableVertexAttribArray(directionalLight_Position);
+    gl.bufferData(gl.ARRAY_BUFFER, dirVert, gl.STATIC_DRAW);
+    gl.disableVertexAttribArray(b_Position);
+    gl.disableVertexAttribArray(a_Position);
+    gl.disableVertexAttribArray(a_Color);
+
+    gl.uniform1i(uniformObjectIndex,1);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+
+    gl.uniform1i(uniformObjectIndex,0);
+    gl.disableVertexAttribArray(directionalLight_Position);
+    gl.enableVertexAttribArray(a_Position); 
+    gl.enableVertexAttribArray(b_Position); 
+    gl.enableVertexAttribArray(a_Color); 
+    gl.uniform1i(boolio,0);
+
+
+
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
 
@@ -606,7 +757,6 @@ function bufferHandling(){
     gl.disableVertexAttribArray(b_Position);
     gl.drawElements(gl.TRIANGLES,numOfIndex,gl.UNSIGNED_SHORT,0);
     gl.enableVertexAttribArray(b_Position); 
-
     var d=0;
     //debugPrint();
 }
@@ -734,53 +884,7 @@ function hover(ev,gl,canvas,a_Position){
       lineVert[numOfVerts-2]=y;
       lineVert[numOfVerts-1]=0;
       
-      gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-
-      gl.disableVertexAttribArray(surfaceNormal_Position);
-
-
-
-      gl.uniform1i(boolio,1);
-      gl.bindBuffer(gl.ARRAY_BUFFER,lineBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER,lineVert,gl.STATIC_DRAW);
-      gl.disableVertexAttribArray(a_Position);
-      gl.disableVertexAttribArray(a_Color);
-      
-      gl.drawArrays(gl.LINE_STRIP,0,numOfVerts/3);
-
-      gl.uniform1i(boolio,0);
-      gl.enableVertexAttribArray(a_Position);  
-      gl.enableVertexAttribArray(a_Color);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, cVert, gl.STATIC_DRAW);
-
-      if(displayN){
-        gl.uniform1i(boolio,2);
-        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, surfaceNormals, gl.STATIC_DRAW);
-
-        gl.disableVertexAttribArray(a_Position);
-        gl.disableVertexAttribArray(a_Color);
-        gl.enableVertexAttribArray(surfaceNormal_Position);
-
-        gl.drawArrays(gl.LINES,0,numOfSurfaceNormals/3);
-
-        gl.disableVertexAttribArray(surfaceNormal_Position);
-        gl.enableVertexAttribArray(a_Position);  
-        gl.enableVertexAttribArray(a_Color); 
-        gl.uniform1i(boolio,0);
-      }
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
-
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-
-      gl.disableVertexAttribArray(b_Position);
-      gl.drawElements(gl.TRIANGLES,numOfIndex,gl.UNSIGNED_SHORT,0);
-      gl.enableVertexAttribArray(b_Position); 
+      bufferHandling();
     }
   }
 }
@@ -809,14 +913,14 @@ function changeBackground(){
   bufferHandling();
 }
 function click(ev, gl, canvas, a_Position) {
+  var x = ev.clientX;
+  var y = ev.clientY; 
+  var rect = ev.target.getBoundingClientRect() ;
+  //0 is left
+  //2 is right
+  x = ((x - rect.left) - canvas.width/2)/(canvas.width/2);
+  y = (canvas.height/2 - (y - rect.top))/(canvas.height/2);
   if(enableMove){
-    var x = ev.clientX;
-    var y = ev.clientY; 
-    var rect = ev.target.getBoundingClientRect() ;
-    //0 is left
-    //2 is right
-    x = ((x - rect.left) - canvas.width/2)/(canvas.width/2);
-    y = (canvas.height/2 - (y - rect.top))/(canvas.height/2);
     if(ev.button==0){
       var z=0;
       numOfVerts+=3;
@@ -844,7 +948,53 @@ function click(ev, gl, canvas, a_Position) {
     }else{
       smoothShading();
     }
+  }else{
+    //check if you clicked the object
+    checkObject(ev);
   }
+}
+function checkObject(ev){
+  var x = ev.clientX, y = ev.clientY;
+  var rect = ev.target.getBoundingClientRect();
+
+  var x_in_canvas = x - rect.left
+  var y_in_canvas = rect.bottom - y;
+  var picked=false;
+  //x and y are the mouse positions
+  //set the bool to red
+  gl.uniform1i(clicked,0);//sets clicked in the shader
+  bufferHandling();
+  //draw it to the screen
+  var pixels = new Uint8Array(4); // Array for storing the pixel value
+  gl.readPixels(x_in_canvas, y_in_canvas, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  for(var p=0;p<4;p++){
+    console.log(pixels[p]);
+  }
+  if (pixels[0] == 255){//checks if the pixel is red where you clicked//also checks the transparency as a key for which object is selected
+    if(pixels[3]==255){
+        //picked = true;
+        alert('OBJECT SELECTED');
+    }else if(pixels[3]==252){
+      console.log("shit actually works");
+      if(directionalLightBool){
+        directionalLightBool=false;
+      }else{
+        directionalLightBool=true;
+      }
+      //recalc lighting
+      if(!mode){
+        smoothShading();
+      }else{
+        flatShading();
+      }
+    } 
+  }else{
+    console.log("not there");
+  }
+
+  gl.uniform1i(clicked, 1);  // Pass false to u_Clicked(rewrite the cube)
+  bufferHandling();
+  //redraw to the sceen
 }
 function flatShading(){
   loading();
