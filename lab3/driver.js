@@ -7,8 +7,13 @@ var VSHADER_SOURCE = `
   attribute vec4 a_Normal;
   attribute vec4 directionalLight_Position;
   uniform mat4 u_MvpMatrix;
+  
   uniform int doIt;
   uniform bool clicked;
+
+  uniform bool directional;
+  uniform bool point;
+
   varying vec4 v_Color;
   void main() {
     if(doIt==1){
@@ -27,7 +32,35 @@ var VSHADER_SOURCE = `
     }else if(doIt==3){
       //if3
       gl_Position=u_MvpMatrix*directionalLight_Position;
-      v_Color=vec4(1,0,0,1);
+      if(directional){
+        if(clicked){
+          v_Color=vec4(1,0,0,1);
+        }else{
+          v_Color = vec4(1,0,0,255);
+        }
+
+      }else{
+        if(clicked){
+           v_Color=vec4(.4,.4,.4,1);
+        }else{
+           v_Color = vec4(1,0,0,255);
+        }
+      }
+    }else if(doIt==4){
+      gl_Position = u_MvpMatrix * a_Position;
+      if(point){
+        if(clicked){
+          v_Color = vec4(1,1,0,255);
+        }else{
+          v_Color = vec4(1,0,0,255);
+        }
+      }else{
+        if(clicked){
+          v_Color = vec4(.4,.4,.4,255);
+        }else{
+          v_Color = vec4(1,0,0,255);
+        }
+      }
     }
   }`;
 
@@ -43,13 +76,17 @@ var FSHADER_SOURCE = `
         gl_FragColor = vec4(v_Color.rgb,1);
     }else if(objectIndex==1){
         gl_FragColor = vec4(v_Color.rgb,.99);
+    }else if(objectIndex==2){
+        gl_FragColor = vec4(v_Color.rgb,.98);
     }
 
   }`;
 //global lighting variables
 var gloss=1;
+//second point light
 var secondLightPosition = new Vector3([0,1,0]);
 var secondLightColor = new Vector3([1,1,0]);
+//directional lighting
 var lightDirection = new Vector3([1,1,1]);
 var specularColor = new Vector3([0,1,0])
 var lightColor = new Vector3([1,1,1]);
@@ -57,12 +94,14 @@ var color = new Vector3([1,0,0]);
 //array allocation
 var vertices = new Float32Array(5000);
 var cVert = new Float32Array(5000);
-
+var cubeVertices = new Float32Array(5000);
 var dirVert = new Float32Array(100);
 var dirIndices = new Uint16Array(2);
 
 var lineVert= new Float32Array(5000);
 var indices = new Uint16Array(5000);
+var cubeIndices = new Uint16Array(5000);
+
 var normals = new Float32Array(5000);
 var colors = new Float32Array(5000);
 var surfaceNormals = new Float32Array(5000);
@@ -73,6 +112,7 @@ var indexBuffer;
 var lineBuffer;
 var colorBuffer;
 var normalBuffer;
+
 var a_Position;
 var a_Color;
 var b_Position;
@@ -82,6 +122,8 @@ var surfaceNormal_Position;
 var directionalLight_Position;
 var boolio;
 var clicked;
+var pointBool;
+var directionalBool;
 //itterators
 var numOfIndex=0;
 var numOfCyl=0;
@@ -105,7 +147,10 @@ var mode=true;
 var specToggle=true;
 var angle=10;
 var globalPos=new Vector3([0,0,5]);
+
+//both start as true
 var directionalLightBool=true;
+var pointLight=true;
 //main function
 //overright
 function main() {
@@ -181,6 +226,13 @@ function main() {
     console.log('Failed to set the vertex information');
     return;
   }
+
+  pointBool = gl.getUniformLocation(gl.program, 'point');
+  gl.uniform1i(pointBool,1);//sets doIt in the shader
+
+  directionalBool = gl.getUniformLocation(gl.program, 'directional');
+  gl.uniform1i(directionalBool,1);//sets doIt in the shader
+
   // Get the storage location of u_MvpMatrix
   u_MvpMatrix = gl.getUniformLocation(gl.program, 'u_MvpMatrix');
   if (!u_MvpMatrix) {
@@ -210,6 +262,27 @@ function main() {
   canvas.onmousemove=function(ev){hover(ev,gl,canvas,a_Position);};
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   createDirectionLight();
+  createCube();
+  bufferHandling();
+}
+function createCube(){
+  var tempOffset=.1;
+  cubeVertices = new Float32Array([   // Vertex coordinates
+     tempOffset, tempOffset+1, tempOffset,  -tempOffset, tempOffset+1, tempOffset,  -tempOffset,-tempOffset+1, tempOffset,   tempOffset,-tempOffset+1, tempOffset,    // v0-v1-v2-v3 front
+     tempOffset, tempOffset+1, tempOffset,   tempOffset,-tempOffset+1, tempOffset,   tempOffset,-tempOffset+1,-tempOffset,   tempOffset, tempOffset+1,-tempOffset,    // v0-v3-v4-v5 right
+     tempOffset, tempOffset+1, tempOffset,   tempOffset, tempOffset+1,-tempOffset,  -tempOffset, tempOffset+1,-tempOffset,  -tempOffset, tempOffset+1, tempOffset,    // v0-v5-v6-v1 up
+    -tempOffset, tempOffset+1, tempOffset,  -tempOffset, tempOffset+1,-tempOffset,  -tempOffset,-tempOffset+1,-tempOffset,  -tempOffset,-tempOffset+1, tempOffset,    // v1-v6-v7-v2 left
+    -tempOffset,-tempOffset+1,-tempOffset,   tempOffset,-tempOffset+1,-tempOffset,   tempOffset,-tempOffset+1, tempOffset,  -tempOffset,-tempOffset+1, tempOffset,    // v7-v4-v3-v2 down
+     tempOffset,-tempOffset+1,-tempOffset,  -tempOffset,-tempOffset+1,-tempOffset,  -tempOffset, tempOffset+1,-tempOffset,   tempOffset, tempOffset+1,-tempOffset     // v4-v7-v6-v5 back
+  ]);
+  cubeIndices = new Uint8Array([
+     0, 1, 2,   0, 2, 3,    // front
+     4, 5, 6,   4, 6, 7,    // right
+     8, 9,10,   8,10,11,    // up
+    12,13,14,  12,14,15,    // left
+    16,17,18,  16,18,19,    // down
+    20,21,22,  20,22,23     // back
+  ]);
 }
 var offset = .01;
 function createRect(){
@@ -533,96 +606,149 @@ function displayNormals(){
   bufferHandling();
 }
 function calculateLighting(){
-      //works for the irst cylyinder but not the following
-    if(!directionalLightBool){
-      colors=new Float32Array(5000);
-      return;
+  //works for the irst cylyinder but not the following
+  var d=1;
+  var p=numOfVertsC-144;//calculates for the last cyl only
+  for(i=p;i<numOfVertsC;i+=3){
+    var temp=new Vector3();
+    temp.elements[0] = normals[i];
+    temp.elements[1] = normals[i+1];
+    temp.elements[2] = normals[i+2];
+
+    temp=temp.normalize();
+
+    var normalL= new Vector3();
+    normalL.elements[0]=lightDirection.elements[0];
+    normalL.elements[1]=lightDirection.elements[1];
+    normalL.elements[2]=lightDirection.elements[2];
+    normalL.normalize();
+
+    var globalPosNorm=new Vector3();
+    globalPosNorm.elements[0] = globalPos.elements[0];
+    globalPosNorm.elements[1] = globalPos.elements[1];
+    globalPosNorm.elements[2] = globalPos.elements[2];
+    globalPosNorm=globalPosNorm.normalize();
+
+    var diffuse = new Vector3();
+    var spec=new Vector3();
+
+    //if directional
+    if(directionalLightBool){
+      diffuse=dirDiffuse(diffuse,temp,normalL);
+      spec=dirSpec(spec,temp,globalPosNorm);
     }
-    var d=1;
-    var p=numOfVertsC-144;//calculates for the last cyl only
-    for(i=p;i<numOfVertsC;i+=3){
-      var temp=new Vector3();
-      temp.elements[0] = normals[i];
-      temp.elements[1] = normals[i+1];
-      temp.elements[2] = normals[i+2];
 
-      temp=temp.normalize();
-
-      var normalL= new Vector3();
-      normalL.elements[0]=lightDirection.elements[0];
-      normalL.elements[1]=lightDirection.elements[1];
-      normalL.elements[2]=lightDirection.elements[2];
-      normalL.normalize();
-
-      var globalPosNorm=new Vector3();
-      globalPosNorm.elements[0] = globalPos.elements[0];
-      globalPosNorm.elements[1] = globalPos.elements[1];
-      globalPosNorm.elements[2] = globalPos.elements[2];
-      globalPosNorm=globalPosNorm.normalize();
-
-      var nDotL = temp.elements[0] * normalL.elements[0] + 
-                  temp.elements[1] * normalL.elements[1] + 
-                  temp.elements[2] * normalL.elements[2];
-      if(nDotL<0){
-        nDotL=0;
-      }
-      nDotL=nDotL;
-      //calculate the lighting
-      var diffuse = new Vector3();
-      //color=color.normalize();
-     // lightColor=lightColor.normalize();
-      //do the multiplication manually?
-      //take the cross product?
-      diffuse.elements[0] = lightColor.elements[0] * color.elements[0];
-      diffuse.elements[1] = lightColor.elements[1] * color.elements[1];
-      diffuse.elements[2] = lightColor.elements[2] * color.elements[2];
-      //then multiply by the nDotL
-      diffuse.elements[0] = diffuse.elements[0] * nDotL;
-      diffuse.elements[1] = diffuse.elements[1] * nDotL;
-      diffuse.elements[2] = diffuse.elements[2] * nDotL;
-      //diffuse.elements=lightColor.elements * color.elements * nDotL;
-      d++;
-      //specular
-      var halfwayNormal=halfwayVector(globalPosNorm);
-      var light=vector3Multiply(specularColor,lightColor);
-      var nDotH=dotProduct(temp,halfwayNormal);
-      var spec=new Vector3();
-      if(nDotH<0){
-        nDotH=0;
-        //console.log(nDotH);
-      }
-      spec.elements[0] = light.elements[0] * Math.pow(nDotH,gloss);
-      spec.elements[1] = light.elements[1] * Math.pow(nDotH,gloss);
-      spec.elements[2] = light.elements[2] * Math.pow(nDotH,gloss);
-      nDotL = temp.elements[0] * lightDirection.elements[0] + 
-              temp.elements[1] * lightDirection.elements[1] + 
-              temp.elements[2] * lightDirection.elements[2];
-      if(specToggle){
-        var finalColor=new Vector3([0,0,0]);
-        finalColor.elements[0] = diffuse.elements[0];
-        finalColor.elements[1] = spec.elements[1];
-        finalColor.elements[2] = .2;
-        //somehow pass this into the shader?
-        //diffuse = new Vector3([0,0,0]);
-        if(nDotL>=0){
-          colors[i] =   finalColor.elements[0];
-          colors[i+1] = finalColor.elements[1];
-          colors[i+2] = finalColor.elements[2];
-        }
-
-      }else{
-        //diffuse = new Vector3([0,0,0]);
-        if(nDotL>=0){
-          colors[i] =   diffuse.elements[0];
-          colors[i+1] = diffuse.elements[1];
-          colors[i+2] = diffuse.elements[2];
-        }
-
-      }
-      //add a final .2 to the blue for ambient lskjdgkfh
-
-      //numberOfColors+=3;
+    //if point
+    var spec2=new Vector3([0,0,0]);
+    if(pointLight){
+      diffuse=pointDiffuse(diffuse,temp);
+      spec2=pointSpec(spec2,temp,globalPosNorm);
+      //do the point light calculations
     }
+
+    if(specToggle){
+      var finalColor=new Vector3([0,0,0]);
+      finalColor.elements[0] = diffuse.elements[0];
+      finalColor.elements[1] = (spec.elements[1] + spec2.elements[1])>1?1:(spec.elements[1] +spec2.elements[1]);
+      finalColor.elements[2] = .2;//ambient
+
+      colors[i] =   finalColor.elements[0];
+      colors[i+1] = finalColor.elements[1];
+      colors[i+2] = finalColor.elements[2];
+
+    }else{
+      colors[i] =   diffuse.elements[0]
+      colors[i+1] = diffuse.elements[1]
+      colors[i+2] = diffuse.elements[2] + .2;
+    }
+    //add a final .2 to the blue for ambient lskjdgkfh
+
+    //numberOfColors+=3;
+  }
+}
+function dirSpec(spec,temp,globalPosNorm){
+  var halfwayNormal=halfwayVector(globalPosNorm,lightDirection);
+  var light=vector3Multiply(specularColor,lightColor);
+  var nDotH=dotProduct(temp,halfwayNormal);
+
+  if(nDotH<0){
+    nDotH=0;
+    //console.log(nDotH);
+  }
+  spec.elements[0] = light.elements[0] * Math.pow(nDotH,gloss);
+  spec.elements[1] = light.elements[1] * Math.pow(nDotH,gloss);
+  spec.elements[2] = light.elements[2] * Math.pow(nDotH,gloss);
+  return spec;
+}
+function dirDiffuse(diffuse,temp,normalL){
+  var nDotL = temp.elements[0] * normalL.elements[0] + 
+              temp.elements[1] * normalL.elements[1] + 
+              temp.elements[2] * normalL.elements[2];
+  if(nDotL<0){
+    nDotL=0;
+  }
+  nDotL=nDotL;
+
+  //take the cross product?
+  diffuse.elements[0] = lightColor.elements[0] * color.elements[0];
+  diffuse.elements[1] = lightColor.elements[1] * color.elements[1];
+  diffuse.elements[2] = lightColor.elements[2] * color.elements[2];
+  //then multiply by the nDotL
+  diffuse.elements[0] = diffuse.elements[0] * nDotL;
+  diffuse.elements[1] = diffuse.elements[1] * nDotL;
+  diffuse.elements[2] = diffuse.elements[2] * nDotL;
+  return diffuse;
+}
+function pointSpec(spec,temp,globalPosNorm){
+  var normalizedPointDirection =new Vector3();
+  normalizedPointDirection.elements[0] = secondLightPosition.elements[0] - cVert[i];
+  normalizedPointDirection.elements[1] = secondLightPosition.elements[1] - cVert[i+1];
+  normalizedPointDirection.elements[2] = secondLightPosition.elements[2] - cVert[i+2];
+
+  var halfwayNormal2=halfwayVector(globalPosNorm,normalizedPointDirection);
+  var light2=vector3Multiply(specularColor,secondLightColor);
+  var nDotH2=dotProduct(temp,halfwayNormal2);
+  var spec2=new Vector3();
+
+  if(nDotH2<0){
+    nDotH2=0;
+    //console.log(nDotH);
+  }
+
+  spec2.elements[0] = light2.elements[0] * Math.pow(nDotH2,gloss);
+  spec2.elements[1] = light2.elements[1] * Math.pow(nDotH2,gloss);
+  spec2.elements[2] = light2.elements[2] * Math.pow(nDotH2,gloss);
+  return spec2;
+}
+function pointDiffuse(diffuse,temp){
+  var normalizedPointDirection =new Vector3();
+  normalizedPointDirection.elements[0] = secondLightPosition.elements[0] - cVert[i];
+  normalizedPointDirection.elements[1] = secondLightPosition.elements[1] - cVert[i+1];
+  normalizedPointDirection.elements[2] = secondLightPosition.elements[2] - cVert[i+2];
+  //console.log(normalizedPointDirection);
+  normalizedPointDirection=normalizedPointDirection.normalize();
+  console.log(normalizedPointDirection.elements);
+  //both normalized
+  //comes out to 0
+  var nDotSL =temp.elements[0] * normalizedPointDirection.elements[0] + 
+              temp.elements[1] * normalizedPointDirection.elements[1] + 
+              temp.elements[2] * normalizedPointDirection.elements[2];
+
+  if(nDotSL<0){
+    nDotSL=0;
+    //console.log("test");
+  }
+  var col = new Vector3();
+  col.elements[0] = secondLightColor.elements[0] * color.elements[0];//light * mat
+  col.elements[1] = secondLightColor.elements[1] * color.elements[1];
+  col.elements[2] = secondLightColor.elements[2] * color.elements[2];
+  //then multiply by the nDotL
+  console.log(col.elements);
+
+  diffuse.elements[0] += col.elements[0] * nDotSL;
+  diffuse.elements[1] += col.elements[1] * nDotSL;
+  diffuse.elements[2] += col.elements[2] * nDotSL;
+  return diffuse;
 }
 function toggleSpecular(){
   if(specToggle){
@@ -670,9 +796,9 @@ function vector3Addition(vec1,vec2){
   sum.elements[2] = vec1.elements[2] + vec2.elements[2];
   return sum;
 }
-function halfwayVector(vec1){
+function halfwayVector(vec1, light){
   var halfwayN;
-  var LV=vector3Addition(lightDirection,vec1);
+  var LV=vector3Addition(light,vec1);
   var magLV=magnitude(LV);
   halfwayN=vector3Divide(LV,magLV);
   return halfwayN;
@@ -700,13 +826,13 @@ function bufferHandling(){
     gl.disableVertexAttribArray(a_Position);
     gl.disableVertexAttribArray(a_Color);
     gl.disableVertexAttribArray(surfaceNormal_Position);
+
     gl.drawArrays(gl.LINE_STRIP,0,numOfVerts/3);
 
     gl.uniform1i(boolio,0);
     gl.enableVertexAttribArray(a_Position);  
     gl.enableVertexAttribArray(a_Color); 
 
-    gl.enable(gl.DEPTH_TEST);
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, cVert, gl.STATIC_DRAW);
     if(displayN){
@@ -757,6 +883,27 @@ function bufferHandling(){
     gl.disableVertexAttribArray(b_Position);
     gl.drawElements(gl.TRIANGLES,numOfIndex,gl.UNSIGNED_SHORT,0);
     gl.enableVertexAttribArray(b_Position); 
+
+    gl.enableVertexAttribArray(a_Position); 
+    gl.disableVertexAttribArray(b_Position);
+    gl.disableVertexAttribArray(a_Color);
+
+    gl.uniform1i(boolio,4);
+    gl.uniform1i(uniformObjectIndex,2);
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, cubeVertices, gl.STATIC_DRAW);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeIndices, gl.STATIC_DRAW);
+
+    gl.drawElements(gl.TRIANGLES,36,gl.UNSIGNED_BYTE,0);
+
+    gl.uniform1i(boolio,0);
+    gl.uniform1i(uniformObjectIndex,0);
+    gl.disableVertexAttribArray(a_Position);
+    gl.enableVertexAttribArray(b_Position); 
+    gl.enableVertexAttribArray(a_Color); 
+
     var d=0;
     //debugPrint();
 }
@@ -978,8 +1125,29 @@ function checkObject(ev){
       console.log("shit actually works");
       if(directionalLightBool){
         directionalLightBool=false;
+        gl.uniform1i(directionalBool,0);
+        //recalculate lighting
       }else{
         directionalLightBool=true;
+        gl.uniform1i(directionalBool,1);
+        //recalculate lighting
+      }
+      //recalc lighting
+      if(!mode){
+        smoothShading();
+      }else{
+        flatShading();
+      }
+    }else if(pixels[3]==250){
+      console.log("shit actually works");
+      if(pointLight){
+        pointLight=false;
+        gl.uniform1i(pointBool,0);
+        //recalculate lighting
+      }else{
+        pointLight=true;
+        gl.uniform1i(pointBool,1);
+        //recalculate lighting
       }
       //recalc lighting
       if(!mode){
