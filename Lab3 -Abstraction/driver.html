@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+    <meta charset="utf-8">
+    <title>lab3</title>
+    <link rel="stylesheet" href="driver.css">
+  </head>
+  <body onload="main()">
+    <script src="../lib/cuon-matrix.js"></script>
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script src="driver.js"></script>
+    <script src="ioSOR.js"></script>
+
+    <div id ="top">
+        <h3>Michael Ettinger - Lab3</h3>
+    </div>
+    <div id = "everything">
+        <canvas id="webgl" width="500" height="500">
+        Please use a browser that supports "canvas"
+        </canvas>
+        <div id = "inputArea">
+            <div id = "input" align="center">
+                <!--input field for file saving and loading as well as antything else-->
+                <h1>File Input/Output</h1>
+                <input type = "file" id = "fileName">
+                <button class = "button" onclick="saveSOR()">Save SOR</button>
+                <button class = "button" onclick="readSOR()">Extract SOR</button>
+            </div>
+            <div id = "input" align="center">
+                <!--input field for file saving and loading as well as antything else-->
+                <h1>Misc.</h1>
+                <button class = "button" onclick="swapPersp()">Swap Perspective</button>
+                <button class = "button" onclick="displayNormals()">Normals</button>
+                <button class = "button" onclick="changeBackground()" >Clear Color</button>
+                <button class = "button" onclick="toggleShading()" >Smooth/flat Toggle</button>
+                <button class = "button" onclick="toggleSpecular()" >Specular Toggle</button>
+                <!--<button class = "button" onclick="newColor()">Cyl Color</button>-->
+                <h1>Specular Slider</h1>
+                <input class="slider" type="range" name="inputRange" min="1" max="20" value="0" id="sliderValue">
+                <h1>Radius Slider</h1>
+                <input class="slider" type="range" name="inputRange" step = ".01" min=".01" max=".2" value=".01" id="radiusSlider">
+            </div>
+        </div>
+    </div>
+</body></html>
+
+
