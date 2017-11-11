@@ -92,11 +92,17 @@ var MeshObject = function(arraySize){
   this.numOfSurfaceNormals = 0;//number of surface normals
   this.numOfNormals        = 0;//number of normals
 
+  this.alphaKey;
+  this.origin = new Vector3();
   //multiply the verticies after transformations by the model matrix
   //multiply the normals after transformations by the normal matrix
   //multiply the u_mvpMatrix by the model matrix to display the transformations
-  this.modelMatrix  = new Matrix4();//the model matrix for the object
-  this.normalMatrix = new Matrix4();//the normal matrix for the object
+  this.modelMatrix     = new Matrix4();//the model matrix for the object
+  this.normalMatrix    = new Matrix4();//the normal matrix for the object
+
+  this.translateMatrix = new Matrix4();
+  this.rotationMatrix  = new Matrix4();
+  this.scaleMatrix     = new Matrix4();
   //important for mesh
   this.vertices       = new Float32Array(arraySize);//the place where the object verts are stored
   this.indices        = new Uint16Array(arraySize); //the place where the object indicies are stored
@@ -134,8 +140,8 @@ var MeshObject = function(arraySize){
     this.calculateIndicies();
     this.calculateLighting();
 
-    this.bufferHandling(); 
-    this.printData();
+    allBuffers();
+    //this.printData();
   }
   //debug function for checking proper numbers
   this.printData = function printData(){
@@ -404,6 +410,8 @@ var MeshObject = function(arraySize){
 
       temp = temp.normalize();
 
+      temp=this.normalMatrix.multiplyVector3(temp);
+
       var normalL = new Vector3();
       normalL.elements[0] = lightDirection.elements[0];
       normalL.elements[1] = lightDirection.elements[1];
@@ -526,7 +534,7 @@ var MeshObject = function(arraySize){
   /**********************************************SHADING**********************************************/
   this.flatShading = function flatShading(){
     this.loading();
-    this.bufferHandling();
+    allBuffers();
   }
   this.smoothCriminal = function smoothCriminal(startPointIndex){
     for(i=startPointIndex;i<startPointIndex+36;i+=3){
@@ -570,7 +578,7 @@ var MeshObject = function(arraySize){
       this.calculateLighting();
     }
     this.numOfVertsC = temp ; 
-    this.bufferHandling();
+    allBuffers();
     mode = false;
   }
   this.loading = function loading(){
@@ -605,7 +613,6 @@ var MeshObject = function(arraySize){
   this.bufferHandling = function bufferHandling(){
     /**********************************************RESET**********************************************/
     //resets all the arrays to disabled and clears the screen to start redrawing the frame buffer
-    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);      //clears the frame buffer
     gl.disableVertexAttribArray(surfaceNormal_Position);    //disable surface normals
     gl.disableVertexAttribArray(directionalLight_Position); //disable directional
     gl.disableVertexAttribArray(a_Position);                //disable position
@@ -615,15 +622,36 @@ var MeshObject = function(arraySize){
     /**********************************************LINES**********************************************/
     //the attribute arrays need to be enabled when you draw
     //sets the uniform doIt to 1 so that it colors the lines properly
-    gl.uniform1i(boolio,1);
-    gl.enableVertexAttribArray(b_Position);
+    this.modelMatrix = new Matrix4();
+    this.modelMatrix.translate(this.origin.elements[0],this.origin.elements[1],this.origin.elements[2]);
+    this.modelMatrix.multiply(this.translateMatrix);
+    this.modelMatrix.multiply(this.rotationMatrix);
+    this.modelMatrix.multiply(this.scaleMatrix);
+    this.modelMatrix.translate(-this.origin.elements[0],-this.origin.elements[1],-this.origin.elements[2]);
+    this.normalMatrix.setInverseOf(this.modelMatrix);
+    this.normalMatrix.transpose();
+    if(!mode){
+      this.smoothShading();
+    }else{
+      this.loading();
+    }
+    //after the model matrix is calculated it can be applied for both the object and the lines
+    if(numOfVerts>0){
+      gl.uniformMatrix4fv(u_MvpMatrix, false, (mvpMatrix.multiply(this.modelMatrix)).elements);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, lineBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, lineVert, gl.STATIC_DRAW);
+      gl.uniform1i(boolio,1);
+      gl.enableVertexAttribArray(b_Position);
 
-    gl.drawArrays(gl.LINE_STRIP,0,numOfVerts/3);
+      gl.bindBuffer(gl.ARRAY_BUFFER, lineBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, lineVert, gl.STATIC_DRAW);
 
-    gl.disableVertexAttribArray(b_Position);
+      gl.drawArrays(gl.LINE_STRIP,0,numOfVerts/3);
+
+      gl.disableVertexAttribArray(b_Position);
+    }else{
+      gl.uniformMatrix4fv(u_MvpMatrix, false, (mvpMatrix.multiply(this.modelMatrix)).elements);
+    }
+
 
     /**********************************************OBJECT**********************************************/
     //sets the uniform doIt to 0 so that it colors the object properly
@@ -644,6 +672,13 @@ var MeshObject = function(arraySize){
 
     gl.disableVertexAttribArray(a_Position);
     gl.disableVertexAttribArray(a_Color);
+
+    if(perspectiveBool){
+      mvpMatrix.setOrtho(-1, 1,-1, 1,-1, 1);
+    }else{
+      mvpMatrix.setPerspective(30, 1, 1, 100);
+      mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
+    }
     /**********************************************NORMALS**********************************************/
     //displayN determines whether or not the normals button has been pressed in the html file
     if(displayN){
@@ -661,6 +696,8 @@ var MeshObject = function(arraySize){
     }
     /**********************************************DIRECTIONAL**********************************************/
     //tells the shader to draw this object as pure red or if its clicked grey
+    gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
+
     gl.uniform1i(boolio,3);
     gl.enableVertexAttribArray(directionalLight_Position);
     
@@ -673,7 +710,7 @@ var MeshObject = function(arraySize){
 
     gl.disableVertexAttribArray(directionalLight_Position);
     /**********************************************POINT**********************************************/
-    //the point light at the top of the screen
+    //the point light at the top of the screen    
     gl.enableVertexAttribArray(a_Position); 
 
     gl.uniform1i(boolio,4);
@@ -691,10 +728,31 @@ var MeshObject = function(arraySize){
     gl.uniform1i(uniformObjectIndex,0);
     gl.disableVertexAttribArray(a_Position);
   }
+  /**********************************************TRANSFORMATIONS**********************************************/
+  this.calculateOrigin = function calculateOrigin(){
+    this.origin = new Vector3();
+    for(i=0;i<this.numOfVertsC;i+=3){
+      var tempVector = new Vector3([this.vertices[i],this.vertices[i + 1],this.vertices[i + 2]]);
+      this.origin    = vector3Addition(tempVector, this.origin);
+    }
+    this.origin.elements[0] = this.origin.elements[0] / (this.numOfVertsC / 3);
+    this.origin.elements[1] = this.origin.elements[1] / (this.numOfVertsC / 3);
+    this.origin.elements[2] = this.origin.elements[2] / (this.numOfVertsC / 3);
+
+    return this.origin;
+  }
+  this.translateModelMatrix = function translateModelMatrix(x,y,z){     //used for setting the translation matrix
+    this.translateMatrix.translate(x,y,z);
+  }
+  this.rotationModelMatrix = function rotationModelMatrix(angle,x,y,z){ //used for setting the rotation matrix
+    this.rotationMatrix.rotate(angle,x,y,z);
+  }
+  this.scaleModelMatrix = function scaleModelMatrix(x,y,z){             //used for setting the scale matrix
+    this.scaleMatrix.scale(x,y,z);
+  }
 }
-var meshObject = new MeshObject(5000);//temperary object for testing
+var meshObject = new MeshObject(5000);//Currently selected object
 var objectList = [];                  //the list for all objects in the scene
-objectList.push(meshObject);          //pushes the meshObject into the array
 /**********************************************GLOBALS**********************************************/
 //all the variables that need to stay global in order to keep everything running properly
 //line verts
@@ -735,7 +793,7 @@ var gl;
 //misc
 var radius=.05;
 var enableMove=true;
-var perspectiveBool=false;
+var perspectiveBool=true;
 var displayN = false;
 var u_MvpMatrix;
 var mvpMatrix;
@@ -747,6 +805,7 @@ var angle=10;
 var globalPos=new Vector3([0,0,5]);
 var directionalLightBool=true;
 var pointLight=true;
+var currentlyDrawing = false;
 /**********************************************MAIN**********************************************/
 //the main functions runs on the program starting and handles initialization and other things.
 function main() {
@@ -772,17 +831,22 @@ function main() {
   createDirectionLight();
   createCube();
 }
+function allBuffers(){
+    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);      //clears the frame buffer
+    displayAll();
+}
 function inputHandling(){
-  /**********************************************ROTATION**********************************************/
+  /**********************************************CAMERA**********************************************/
   document.onkeydown = function(ev){
     if(ev.keyCode == 65){
       var mat = new Matrix4();
-      mat.setRotate(-angle, 0, 1, 0);
+      mat.setRotate(angle, 0, 1, 0);
       globalPos = mat.multiplyVector3(globalPos);
       mvpMatrix.setPerspective(30, 1, 1, 100);
       mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
       gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
       //redraw the entire screen
+      //iteratate through every object stored in the list and redo the shading like this for every single one
       if(!mode){
         meshObject.smoothShading();
       }else{
@@ -791,7 +855,7 @@ function inputHandling(){
     }else if(ev.keyCode == 68){
         //D
       var mat = new Matrix4();
-      mat.setRotate(angle, 0, 1, 0);
+      mat.setRotate(-angle, 0, 1, 0);
       globalPos=mat.multiplyVector3(globalPos);
       mvpMatrix.setPerspective(30, 1, 1, 100);
       mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
@@ -802,6 +866,45 @@ function inputHandling(){
       }else{
         meshObject.flatShading();
       }
+    }else if(ev.keyCode==37){
+      /**********************************************TRANSLATION**********************************************/
+      //before rotating translate the object to the origin
+      meshObject.calculateOrigin();
+      meshObject.translateModelMatrix(-.01,0,0);
+      allBuffers();
+    }else if(ev.keyCode==38){
+      //before rotating translate the object to the origin
+      meshObject.calculateOrigin();
+      meshObject.translateModelMatrix(0,.01,0);
+      allBuffers();
+    }else if(ev.keyCode==39){
+      //before rotating translate the object to the origin
+      meshObject.calculateOrigin();
+      meshObject.translateModelMatrix(.01,0,0);
+      allBuffers();
+    }else if(ev.keyCode==40){
+      //before rotating translate the object to the origin
+      meshObject.calculateOrigin();
+      meshObject.translateModelMatrix(0,-.01,0);
+      allBuffers(); 
+    /**********************************************ROTATION**********************************************/
+    }else if(ev.keyCode==90){
+      meshObject.calculateOrigin();
+      meshObject.rotationModelMatrix(10,0,0,1);
+      allBuffers();
+    }else if(ev.keyCode==88){
+      meshObject.calculateOrigin();
+      meshObject.rotationModelMatrix(-10,0,0,1);
+      allBuffers();
+    /**********************************************SCALE**********************************************/
+    }else if(ev.keyCode==67){
+      meshObject.calculateOrigin();
+      meshObject.scaleModelMatrix(2,2,2);
+      allBuffers();
+    }else if(ev.keyCode==86){
+      meshObject.calculateOrigin();
+      meshObject.scaleModelMatrix(.5,.5,.5);
+      allBuffers();
     }
   }
   /**********************************************HTML**********************************************/
@@ -811,7 +914,7 @@ function inputHandling(){
     //recalc the lighting
     if(mode){
       meshObject.loading();
-      meshObject.bufferHandling();
+      allBuffers();
     }else{
       meshObject.smoothShading();
     }
@@ -969,7 +1072,7 @@ function swapPersp(){
     perspectiveBool=true;
   }
   gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
-  meshObject.bufferHandling();
+  allBuffers();
 }
 function displayNormals(){
   if(displayN){
@@ -977,7 +1080,7 @@ function displayNormals(){
   }else{
     displayN=true;
   }
-  meshObject.bufferHandling();
+  allBuffers();
 }
 function toggleSpecular(){
   if(specToggle){
@@ -1000,9 +1103,11 @@ function toggleShading(){
   if(mode==true){
     //smooth it
     meshObject.smoothShading();
+    mode=false;
   }else{
     //flat it
     meshObject.flatShading();
+    mode=true;
   }
 }
 /**********************************************MATH**********************************************/
@@ -1063,8 +1168,7 @@ function hover(ev,gl,canvas,a_Position){
       lineVert[numOfVerts - 3] = x;
       lineVert[numOfVerts - 2] = y;
       lineVert[numOfVerts - 1] = 0;
-      
-      meshObject.bufferHandling();
+      allBuffers();
     }
   }
 }
@@ -1073,7 +1177,12 @@ function changeBackground(){
          Math.floor(Math.random()*100)/100,
          Math.floor(Math.random()*100)/100,
          Math.floor(Math.random()*100)/100);
-  bufferHandling();
+  allBuffers();
+}
+function displayAll(){
+  for(i=0;i<objectList.length;i++){
+    objectList[i].bufferHandling();
+  }
 }
 function click(ev, gl, canvas, a_Position) {
   var x = ev.clientX;
@@ -1085,6 +1194,14 @@ function click(ev, gl, canvas, a_Position) {
 
   if(enableMove){
     if(ev.button==0){
+      if(!currentlyDrawing){
+        //creates a new object
+        objectList.push(new MeshObject(5000));
+        //sets that object as the currently selected object
+        meshObject = objectList[objectList.length-1];
+        console.log(objectList.length);
+      }
+      currentlyDrawing = true;
       var z = 0;
       numOfVerts+=3;
 
@@ -1100,6 +1217,7 @@ function click(ev, gl, canvas, a_Position) {
       lineVert[numOfVerts - 2]= y;
       lineVert[numOfVerts - 1]= z;
     }else if(ev.button==2){
+      currentlyDrawing=false;
       enableMove=false;
       numOfVerts+=3;
 
@@ -1108,6 +1226,11 @@ function click(ev, gl, canvas, a_Position) {
       lineVert[numOfVerts - 1]= z;
 
       meshObject.drawCylinder(gl);
+
+      //reset for multiple gc
+      lineVert = new Float32Array(5000);
+      numOfVerts = 0;
+      enableMove = true;
     }
     if(mode==true){
       meshObject.flatShading();
@@ -1193,7 +1316,7 @@ function readSOR(){
     meshObject.numOfVertsC=SORObj.vertices[4998];
     meshObject.loading();
     meshObject.numOfVerts=3;
-    meshObject.bufferHandling();
+    allBuffers();
   }
 }
 //saves the cylinder as an obj
