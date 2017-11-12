@@ -13,6 +13,7 @@ var VSHADER_SOURCE = `
   uniform bool clicked;
   uniform bool directional;
   uniform bool point;
+  uniform bool selected;
 
   varying vec4 v_Color;
 
@@ -23,7 +24,11 @@ var VSHADER_SOURCE = `
     }else if(doIt==0){
         gl_Position = u_MvpMatrix * a_Position;
         if(clicked){
-           v_Color = a_Color;
+         if(selected){
+           v_Color = vec4(a_Color.rgb+.5,255);
+         }else{
+          v_Color = a_Color;
+         }
         }else{
            v_Color = vec4(1,0,0,255);
         }
@@ -86,6 +91,7 @@ var FSHADER_SOURCE = `
 var MeshObject = function(arraySize){
   /**********************************************VARIABLES**********************************************/
   this.isMostRecent = false;
+  this.isSelected = false;
   //iterators
   this.numOfIndex          = 0;//number of indicies
   this.numOfCyl            = 0;//number of cylinders
@@ -105,6 +111,10 @@ var MeshObject = function(arraySize){
   this.translateMatrix = new Matrix4();
   this.rotationMatrix  = new Matrix4();
   this.scaleMatrix     = new Matrix4();
+
+  this.scaleAmount = 1;//default size
+  this.rotationX = 1;
+  this.rotationY = 1;
   //important for mesh
   this.vertices       = new Float32Array(arraySize);//the place where the object verts are stored
   this.indices        = new Uint16Array(arraySize); //the place where the object indicies are stored
@@ -659,7 +669,9 @@ var MeshObject = function(arraySize){
     /**********************************************OBJECT**********************************************/
     //sets the uniform doIt to 0 so that it colors the object properly
     gl.uniform1f(alpha,this.alphaKey/255);//sets the alpha value for the object when its clicked
-
+    if(this.isSelected){
+      gl.uniform1i(selected,1);
+    }
     gl.uniform1i(boolio,0);
     gl.enableVertexAttribArray(a_Position);  
     gl.enableVertexAttribArray(a_Color); 
@@ -678,6 +690,7 @@ var MeshObject = function(arraySize){
     gl.disableVertexAttribArray(a_Position);
     gl.disableVertexAttribArray(a_Color);
 
+    gl.uniform1i(selected,0);
     if(perspectiveBool){
       mvpMatrix.setOrtho(-1, 1,-1, 1,-1, 1);
     }else{
@@ -795,8 +808,10 @@ var clicked;
 var pointBool;
 var directionalBool;
 var alpha;
+var selected;
 //Global gl reference
 var gl;
+var canvas;
 //misc
 var radius=.05;
 var enableMove=true;
@@ -813,11 +828,12 @@ var globalPos=new Vector3([0,0,5]);
 var directionalLightBool=true;
 var pointLight=true;
 var currentlyDrawing = false;
+var holdingClick = false;
 /**********************************************MAIN**********************************************/
 //the main functions runs on the program starting and handles initialization and other things.
 function main() {
   inputHandling();
-  var canvas = document.getElementById('webgl');
+  canvas = document.getElementById('webgl');
   gl = WebGLUtils.setupWebGL(canvas,{preserveDrawingBuffer: true});
   if (!gl) {
     console.log('Failed to get the rendering context for WebGL');
@@ -832,8 +848,50 @@ function main() {
     console.log('Failed to set the vertex information');
     return;
   }
-  canvas.onmousedown = function(ev){ click(ev, gl, canvas, a_Position); };
-  canvas.onmousemove=function(ev){hover(ev,gl,canvas,a_Position);};
+  canvas.oncontextmenu = function(ev){return false;}
+  canvas.onmousedown = function(ev){
+    click(ev, gl, canvas, a_Position);
+    if(!enableMove){
+      if(ev.button==2){
+
+        holdingClick = true;
+        console.log("right");
+      }
+    }
+  };
+  canvas.onmousemove = function(ev){
+    hover(ev,gl,canvas,a_Position);
+    if(!enableMove){
+      if(holdingClick){
+        mouseInput(ev);
+      }
+    }
+  };
+  canvas.onmouseup   = function(ev){
+    if(!enableMove){
+      if(ev.button==2){
+        holdingClick = false;
+        console.log("clicked")
+      }
+    }
+  };
+  canvas.onmousewheel = function(ev){
+     ev.preventDefault();
+    if(!enableMove){
+      var wheelAmount = ev.deltaY;
+      var temp;
+      if(wheelAmount>0){
+        temp=(1.01);
+      }else if(wheelAmount<0){
+        temp=(.99);
+      }
+      if(wheelAmount!=0){
+        meshObject.scaleAmount = temp;
+        meshObject.scaleModelMatrix(meshObject.scaleAmount,meshObject.scaleAmount,meshObject.scaleAmount);
+        allBuffers();
+      }
+    }
+  }
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   createDirectionLight();
   createCube();
@@ -841,6 +899,47 @@ function main() {
 function allBuffers(){
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);      //clears the frame buffer
     displayAll();
+}
+function mouseInput(ev){
+  var x = ev.clientX;
+  var y = ev.clientY; 
+  var a;
+  var rect = ev.target.getBoundingClientRect() ;
+
+  x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
+  y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
+
+  if(x>.5){
+    meshObject.rotationX = 1;
+    a=1;
+  }else if(x<-.5){
+    meshObject.rotationX = 1;
+    a=-1;
+  }else{
+    meshObject.rotationX = 1;
+    a=0;
+  }
+  if(x!=0){
+    meshObject.calculateOrigin();
+    meshObject.rotationModelMatrix(a , 0, meshObject.rotationX , 0);
+    allBuffers();
+  }
+  if(y>.5){
+    meshObject.rotationY = 1;
+    a=-1;
+  }else if(y<-.5){
+    meshObject.rotationY = 1;
+    a=1;
+  }else{
+    meshObject.rotationY = 1;
+    a=0;
+  }
+  if(y!=0){
+    meshObject.calculateOrigin();
+    meshObject.rotationModelMatrix(a , meshObject.rotationY, 0 , 0);
+    allBuffers();
+  }
+
 }
 function inputHandling(){
   /**********************************************CAMERA**********************************************/
@@ -1045,7 +1144,10 @@ function initBuffers(gl) {
   gl.uniform1i(uniformObjectIndex,0);
 
   alpha = gl.getUniformLocation(gl.program, 'alpha');
-  gl.uniform1f(alpha,1);
+  gl.uniform1f(alpha,1);  
+
+  selected = gl.getUniformLocation(gl.program, 'selected');
+  gl.uniform1i(selected, 0);
 
   clicked = gl.getUniformLocation(gl.program, 'clicked');
   gl.uniform1i(clicked,1);
@@ -1174,6 +1276,12 @@ function displayAll(){
     objectList[i].bufferHandling();
   }
 }
+function newSelected(index){
+  for (var i = 0; i < objectList.length; i++) {
+    objectList[i].isSelected = false;
+  }
+  objectList[index].isSelected = true;
+}
 function click(ev, gl, canvas, a_Position) {
   var x = ev.clientX;
   var y = ev.clientY; 
@@ -1191,7 +1299,8 @@ function click(ev, gl, canvas, a_Position) {
         objectList[objectList.length-1].alphaKey = 255-(objectList.length);  
         //sets that object as the currently selected object
         meshObject              = objectList[objectList.length - 1];//sets the current object
-        meshObject.isMostRecent = true;                             //sets if the object is the most recent
+        meshObject.isMostRecent = true;   
+        newSelected(objectList.length-1);
       }
       currentlyDrawing = true;
       var z = 0;
@@ -1266,6 +1375,7 @@ function checkObject(ev){
     //check every alpha key
     if(checkAlphaKeys(pixels[3])){
       meshObject = objectList[getMeshObject(pixels[3])];//doesnt work
+      newSelected(getMeshObject(pixels[3]));
     }else{
       //no object matched
       console.log("no match");
@@ -1289,6 +1399,11 @@ function checkObject(ev){
     } 
   }else{
     console.log("not there");
+    //deselect any object
+    meshObject.isSelected=false;
+    meshObject=new MeshObject(5000);
+    meshObject.isSelected=false;
+
   }
 
   gl.uniform1i(clicked, 1);  // Pass false to u_Clicked(rewrite the cube)
