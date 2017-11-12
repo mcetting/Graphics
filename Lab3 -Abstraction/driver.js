@@ -1187,7 +1187,6 @@ function click(ev, gl, canvas, a_Position) {
       if(!currentlyDrawing){
         //creates a new object
         meshObject.isMostRecent = false;
-        var newObject = new MeshObject(5000);
         objectList.push(new MeshObject(5000));
         objectList[objectList.length-1].alphaKey = 255-(objectList.length);  
         //sets that object as the currently selected object
@@ -1266,7 +1265,7 @@ function checkObject(ev){
   if (pixels[0] == 255){//checks if the pixel is red where you clicked
     //check every alpha key
     if(checkAlphaKeys(pixels[3])){
-      MeshObject = objectList[getMeshObject(pixels[3])];//doesnt work
+      meshObject = objectList[getMeshObject(pixels[3])];//doesnt work
     }else{
       //no object matched
       console.log("no match");
@@ -1314,7 +1313,6 @@ function readSOR(){
     //gets the index and verts values from the file
     meshObject.numOfIndex=SORObj.indexes[4999];
     meshObject.numOfVertsC=SORObj.vertices[4998];
-    meshObject.loading();
     meshObject.numOfVerts=3;
     allBuffers();
   }
