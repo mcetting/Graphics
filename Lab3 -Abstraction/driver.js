@@ -71,14 +71,15 @@ var FSHADER_SOURCE = `
   precision mediump float;
   #endif
   uniform int objectIndex;
+  uniform float alpha;
   varying vec4 v_Color;
   void main() {
     if(objectIndex==0){
-        gl_FragColor = vec4(v_Color.rgb,1);
+        gl_FragColor = vec4(v_Color.rgb, alpha);
     }else if(objectIndex==1){
-        gl_FragColor = vec4(v_Color.rgb,.99);
+        gl_FragColor = vec4(v_Color.rgb,.60);
     }else if(objectIndex==2){
-        gl_FragColor = vec4(v_Color.rgb,.98);
+        gl_FragColor = vec4(v_Color.rgb,.50);
     }
   }`;
 //mesh object
@@ -93,7 +94,7 @@ var MeshObject = function(arraySize){
   this.numOfSurfaceNormals = 0;//number of surface normals
   this.numOfNormals        = 0;//number of normals
 
-  this.alphaKey = 255 - objectList.length;//first object is
+  this.alphaKey;
   this.origin = new Vector3();
   //multiply the verticies after transformations by the model matrix
   //multiply the normals after transformations by the normal matrix
@@ -657,6 +658,8 @@ var MeshObject = function(arraySize){
 
     /**********************************************OBJECT**********************************************/
     //sets the uniform doIt to 0 so that it colors the object properly
+    gl.uniform1f(alpha,this.alphaKey/255);//sets the alpha value for the object when its clicked
+
     gl.uniform1i(boolio,0);
     gl.enableVertexAttribArray(a_Position);  
     gl.enableVertexAttribArray(a_Color); 
@@ -791,6 +794,7 @@ var boolio;
 var clicked;
 var pointBool;
 var directionalBool;
+var alpha;
 //Global gl reference
 var gl;
 //misc
@@ -1040,6 +1044,9 @@ function initBuffers(gl) {
   uniformObjectIndex = gl.getUniformLocation(gl.program, 'objectIndex');
   gl.uniform1i(uniformObjectIndex,0);
 
+  alpha = gl.getUniformLocation(gl.program, 'alpha');
+  gl.uniform1f(alpha,1);
+
   clicked = gl.getUniformLocation(gl.program, 'clicked');
   gl.uniform1i(clicked,1);
 
@@ -1180,11 +1187,12 @@ function click(ev, gl, canvas, a_Position) {
       if(!currentlyDrawing){
         //creates a new object
         meshObject.isMostRecent = false;
-        var newObject= new MeshObject(5000);
+        var newObject = new MeshObject(5000);
         objectList.push(new MeshObject(5000));
+        objectList[objectList.length-1].alphaKey = 255-(objectList.length);  
         //sets that object as the currently selected object
-        meshObject = objectList[objectList.length-1];
-        meshObject.isMostRecent = true;
+        meshObject              = objectList[objectList.length - 1];//sets the current object
+        meshObject.isMostRecent = true;                             //sets if the object is the most recent
       }
       currentlyDrawing = true;
       var z = 0;
@@ -1226,6 +1234,21 @@ function toggleDraw(){
   enableMove ? enableMove = false : enableMove = true;
   enableMove ? document.getElementById("curr").innerHTML="Current = Draw" : document.getElementById("curr").innerHTML="Current = Transform";
 }
+function checkAlphaKeys(key){
+  for (var i = 0; i < objectList.length; i++) {
+    if(objectList[i].alphaKey==key){//goes through every object and checks its alpha for the one recieved
+      return true;
+    }
+  }
+  return false;
+}
+function getMeshObject(key){
+  for (var i = 0; i < objectList.length; i++) {
+    if(objectList[i].alphaKey==key){//goes through every object and checks its alpha for the one recieved
+      return i;
+    }
+  }
+}
 function checkObject(ev){
   var x    = ev.clientX, y = ev.clientY;
   var rect = ev.target.getBoundingClientRect();
@@ -1235,18 +1258,20 @@ function checkObject(ev){
   var picked=false;
   //x and y are the mouse positions
   //set the bool to red
-  gl.uniform1i(clicked,0);//sets clicked in the shader
-  allBuffers();
+  gl.uniform1i(clicked,0);//sets everything to pure red
+  allBuffers();//draws everything in pure red
   //draw it to the screen
   var pixels = new Uint8Array(4); // Array for storing the pixel value
   gl.readPixels(x_in_canvas, y_in_canvas, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-  for(var p=0;p<4;p++){
-    console.log(pixels[p]);
-  }
-  if (pixels[0] == 255){//checks if the pixel is red where you clicked//also checks the transparency as a key for which object is selected
-    if(pixels[3]==255){
-        alert('OBJECT SELECTED');
-    }else if(pixels[3]==252){
+  if (pixels[0] == 255){//checks if the pixel is red where you clicked
+    //check every alpha key
+    if(checkAlphaKeys(pixels[3])){
+      MeshObject = objectList[getMeshObject(pixels[3])];//doesnt work
+    }else{
+      //no object matched
+      console.log("no match");
+    }
+    if(pixels[3]==153){//checks if you clicked the directionalLight
       if(directionalLightBool){
         directionalLightBool=false;
         gl.uniform1i(directionalBool,0);
@@ -1254,7 +1279,7 @@ function checkObject(ev){
         directionalLightBool=true;
         gl.uniform1i(directionalBool,1);
       }
-    }else if(pixels[3]==250){
+    }else if(pixels[3]==128){//checks if you cicked the pointlight
       if(pointLight){
         pointLight=false;
         gl.uniform1i(pointBool,0);
