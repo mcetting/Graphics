@@ -16,6 +16,11 @@ body{
 	height:75px;
 	background-color: tan;
 }
+p{
+	background-color: tan;
+	font-family: verdana;
+	font-weight: 700;
+}
 h3{
 	text-align: center;
 	position: relative;
