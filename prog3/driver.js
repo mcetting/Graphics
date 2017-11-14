@@ -829,6 +829,9 @@ var directionalLightBool=true;
 var pointLight=true;
 var currentlyDrawing = false;
 var holdingClick = false;
+var leftClick = false;
+var middleMouse = false;
+var mousePos = new Vector3();
 /**********************************************MAIN**********************************************/
 //the main functions runs on the program starting and handles initialization and other things.
 function main() {
@@ -853,9 +856,44 @@ function main() {
     click(ev, gl, canvas, a_Position);
     if(!enableMove){
       if(ev.button==2){
-
         holdingClick = true;
         console.log("right");
+        var x = ev.clientX;
+        var y = ev.clientY; 
+        var a;
+        var rect = ev.target.getBoundingClientRect() ;
+
+        x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
+        y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
+        
+        mousePos.elements[0] = x;
+        mousePos.elements[1] = y;
+      }else if(ev.button==0){
+        console.log("left");
+        leftClick=true;
+        var x = ev.clientX;
+        var y = ev.clientY; 
+        var a;
+        var rect = ev.target.getBoundingClientRect() ;
+
+        x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
+        y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
+        
+        mousePos.elements[0] = x;
+        mousePos.elements[1] = y;
+      }else if(ev.button == 1){
+        var x = ev.clientX;
+        var y = ev.clientY; 
+        var a;
+        var rect = ev.target.getBoundingClientRect() ;
+
+        x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
+        y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
+        
+        mousePos.elements[0] = x;
+        mousePos.elements[1] = y;
+        middleMouse = true;
+        console.log("MIDDLE");
       }
     }
   };
@@ -863,7 +901,13 @@ function main() {
     hover(ev,gl,canvas,a_Position);
     if(!enableMove){
       if(holdingClick){
-        mouseInput(ev);
+        rotationInput(ev);
+      }
+      if(leftClick){
+        translateInput(ev);
+      }
+      if(middleMouse){
+        translateZ(ev);
       }
     }
   };
@@ -872,6 +916,12 @@ function main() {
       if(ev.button==2){
         holdingClick = false;
         console.log("clicked")
+      }else if(ev.button==0){
+        console.log("clicked baby");
+        leftClick = false;
+      }else if(ev.button == 1){
+        middleMouse = false;
+        console.log("MIDDLE");
       }
     }
   };
@@ -896,11 +946,7 @@ function main() {
   createDirectionLight();
   createCube();
 }
-function allBuffers(){
-    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);      //clears the frame buffer
-    displayAll();
-}
-function mouseInput(ev){
+function translateInput(ev){
   var x = ev.clientX;
   var y = ev.clientY; 
   var a;
@@ -909,37 +955,45 @@ function mouseInput(ev){
   x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
   y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
 
-  if(x>.5){
-    meshObject.rotationX = 1;
-    a=1;
-  }else if(x<-.5){
-    meshObject.rotationX = 1;
-    a=-1;
-  }else{
-    meshObject.rotationX = 1;
-    a=0;
-  }
-  if(x!=0){
-    meshObject.calculateOrigin();
-    meshObject.rotationModelMatrix(a , 0, meshObject.rotationX , 0);
-    allBuffers();
-  }
-  if(y>.5){
-    meshObject.rotationY = 1;
-    a=-1;
-  }else if(y<-.5){
-    meshObject.rotationY = 1;
-    a=1;
-  }else{
-    meshObject.rotationY = 1;
-    a=0;
-  }
-  if(y!=0){
-    meshObject.calculateOrigin();
-    meshObject.rotationModelMatrix(a , meshObject.rotationY, 0 , 0);
-    allBuffers();
-  }
+  meshObject.translateModelMatrix(x - mousePos.elements[0], y - mousePos.elements[1], 0);  
+  allBuffers();
+  mousePos.elements[0] = x;
+  mousePos.elements[1] = y;
+}
+function translateZ(ev){
+  var x = ev.clientX;
+  var y = ev.clientY; 
+  var a;
+  var rect = ev.target.getBoundingClientRect() ;
 
+  x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
+  y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
+
+  meshObject.translateModelMatrix(0, 0, y - mousePos.elements[1]);  
+  allBuffers();
+  mousePos.elements[0] = x;
+  mousePos.elements[1] = y;
+}
+function rotationInput(ev){
+  var x = ev.clientX;
+  var y = ev.clientY; 
+  var a;
+  var rect = ev.target.getBoundingClientRect() ;
+
+  x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
+  y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
+
+  meshObject.rotationModelMatrix((x - mousePos.elements[0]) * 100, 0, 0, 1);
+  meshObject.rotationModelMatrix((y - mousePos.elements[1]) * 100, 1, 0, 0);
+
+  allBuffers();
+  mousePos.elements[0] = x;
+  mousePos.elements[1] = y;
+
+}
+function allBuffers(){
+    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);      //clears the frame buffer
+    displayAll();
 }
 function inputHandling(){
   /**********************************************CAMERA**********************************************/
@@ -1416,6 +1470,13 @@ function readSOR(){
   //reset all the variables and arrays then load them in like this
   if(SORObj!=null){
     var numV=0;
+    meshObject.isMostRecent = false;
+    objectList.push(new MeshObject(5000));
+    objectList[objectList.length-1].alphaKey = 255-(objectList.length);  
+        //sets that object as the currently selected object
+    meshObject              = objectList[objectList.length - 1];//sets the current object
+    meshObject.isMostRecent = true;   
+    newSelected(objectList.length-1);
     for(var i=0;i<5000;i++){
       meshObject.vertices[i]=SORObj.vertices[i];
       numV++;
@@ -1434,15 +1495,15 @@ function readSOR(){
 }
 //saves the cylinder as an obj
 function saveSOR(){
-  meshObject.indices[4999] = numOfIndex;
-  meshObject.indices[4998] = numOfVertsC;
+  meshObject.indices[4999] = meshObject.numOfIndex;
+  meshObject.indices[4998] = meshObject.numOfVertsC;
   var p = prompt("Please enter your file name", "temperooni");
 
   if (p != null) {
     document.getElementById("fileName").innerHTML = p;
   }
 
-  saveFile(new SOR(p, cVert, indices));
+  saveFile(new SOR(p, meshObject.vertices, meshObject.indices));
 }
 //todo
 //multiple gcs not drawing
