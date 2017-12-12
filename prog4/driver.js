@@ -1,3 +1,6 @@
+// change text coords to never change
+
+
 /**********************************************VERTEX_SHADER**********************************************/
 //the shader used for controlling the verticies and vert color
 var VSHADER_SOURCE = `
@@ -8,12 +11,17 @@ var VSHADER_SOURCE = `
   attribute vec4 a_Normal;
   attribute vec4 directionalLight_Position;
 
+  attribute vec4 a_TextCoord;
+  varying vec4 v_TextCoord;
+
   uniform mat4 u_MvpMatrix;
   uniform int doIt;
   uniform bool clicked;
   uniform bool directional;
   uniform bool point;
   uniform bool selected;
+
+  uniform bool usingTexture;
 
   varying vec4 v_Color;
 
@@ -23,14 +31,17 @@ var VSHADER_SOURCE = `
         v_Color = vec4(0,0,0,1);
     }else if(doIt==0){
         gl_Position = u_MvpMatrix * a_Position;
+        if(usingTexture){
+          v_TextCoord = a_TextCoord;
+        }
         if(clicked){
          if(selected){
-           v_Color = vec4(a_Color.rgb+.5,255);
+           v_Color = vec4(a_Color.rgb + .5, 255);
          }else{
           v_Color = a_Color;
          }
         }else{
-           v_Color = vec4(1,0,0,255);
+           v_Color = vec4(1,0,0,255); // makes it red
         }
     }else if(doIt==2){
         gl_Position = u_MvpMatrix * surfaceNormal_Position;
@@ -77,10 +88,20 @@ var FSHADER_SOURCE = `
   #endif
   uniform int objectIndex;
   uniform float alpha;
+
+  uniform bool usingTexture;
+  uniform sampler2D sampler;
+  varying vec4 v_TextCoord;
+
   varying vec4 v_Color;
+
   void main() {
     if(objectIndex==0){
-        gl_FragColor = vec4(v_Color.rgb, alpha);
+        if(usingTexture){
+          gl_FragColor = vec4(texture2D(sampler, v_TextCoord.xy).xyz * v_Color.rgb, alpha);
+        }else{
+          gl_FragColor = vec4(v_Color.rgb, alpha);
+        }
     }else if(objectIndex==1){
         gl_FragColor = vec4(v_Color.rgb,.60);
     }else if(objectIndex==2){
@@ -102,6 +123,7 @@ var MeshObject = function(arraySize){
 
   this.alphaKey;
   this.origin = new Vector3();
+
   //multiply the verticies after transformations by the model matrix
   //multiply the normals after transformations by the normal matrix
   //multiply the u_mvpMatrix by the model matrix to display the transformations
@@ -121,6 +143,8 @@ var MeshObject = function(arraySize){
   this.normals        = new Float32Array(arraySize);//the place where the object normals are stored
   this.colors         = new Float32Array(arraySize);//the place where the calculated colors are stored
   this.surfaceNormals = new Float32Array(arraySize);//the place where the surface normals are stored
+
+  this.textCoords     = new Float32Array(arraySize);//for the texture coordinates
 
   /**********************************************FUNCTIONS**********************************************/
   //this is where everything begins being calculated and stored in the object
@@ -151,6 +175,8 @@ var MeshObject = function(arraySize){
 
     this.calculateIndicies();
     this.calculateLighting();
+    //calc coords at object creation
+    this.calculateTextCoords();
 
     allBuffers();
     //this.printData();
@@ -277,6 +303,83 @@ var MeshObject = function(arraySize){
     this.numOfIndex+=6;
     this.numOfCyl++;
   }
+  this.lastCoord = function(index, coordIndex){
+    // calculate the manual coords
+    console.log(coordIndex);
+    this.textCoords[(index + 12) * 3    ] = 11/12;
+    this.textCoords[(index + 12) * 3 + 1] = 0;
+    this.textCoords[(index + 12) * 3 + 2] = 0;
+
+    this.textCoords[(index + 36) * 3    ] = 11/12;
+    this.textCoords[(index + 36) * 3 + 1] = 1;
+    this.textCoords[(index + 36) * 3 + 2] = 0;
+
+    this.textCoords[this.numOfVertsC - 36 - 36 - 36    ] = 1;
+    this.textCoords[this.numOfVertsC - 36 - 36 - 36 + 1] = 0;
+    this.textCoords[this.numOfVertsC - 36 - 36 - 36 + 2] = 0
+
+    this.textCoords[this.numOfVertsC - 36    ] = (1);
+    this.textCoords[this.numOfVertsC - 36 + 1] = 1;
+    this.textCoords[this.numOfVertsC - 36 + 2] = 0;
+  }
+  this.calculateTextCoords = function(){
+    var index    = this.numOfVertsC / 3 - 48;
+    var flipFlop = false;
+    var coordIndex = 0;
+    for(var i=0;i<66;i+=6){
+      if(!flipFlop){
+        this.getCoords(index, true, coordIndex);
+      }else{
+        this.getCoords(index, false, coordIndex);
+      }
+      coordIndex++;
+      if(flipFlop){
+        flipFlop =false;
+      }else{
+        flipFlop = true;
+      }
+      index++;
+    }
+    this.lastCoord(index , 11);
+  }
+  this.getCoords = function(index, flipFlip, coordIndex){
+    console.log(coordIndex);
+    if(flipFlip){
+      //first cyl
+      this.textCoords[(index) * 3    ] = (coordIndex) / 12; // right
+      this.textCoords[(index) * 3 + 1] = 0;
+      this.textCoords[(index) * 3 + 2] = 0;
+
+      this.textCoords[(index + 24) * 3    ] = (coordIndex) / 12; // bottom righy
+      this.textCoords[(index + 24) * 3 + 1] = 1;
+      this.textCoords[(index + 24) * 3 + 2] = 0;
+
+      this.textCoords[(index + 1) * 3    ] = (coordIndex + 1) / 12; //left corner
+      this.textCoords[(index + 1) * 3 + 1] = 0;
+      this.textCoords[(index + 1) * 3 + 2] = 0;
+
+      this.textCoords[(index + 25) * 3    ] = (coordIndex + 1) / 12;
+      this.textCoords[(index + 25) * 3 + 1] = 1; // bottom left
+      this.textCoords[(index + 25) * 3 + 2] = 0;
+    }else {
+      this.textCoords[(index + 12) * 3    ] = (coordIndex) / 12; // right
+      this.textCoords[(index + 12) * 3 + 1] = 0;
+      this.textCoords[(index + 12) * 3 + 2] = 0;
+
+      this.textCoords[(index + 12 + 24) * 3    ] = (coordIndex) / 12; // bottom righy
+      this.textCoords[(index + 12 + 24) * 3 + 1] = 1;
+      this.textCoords[(index + 12 + 24) * 3 + 2] = 0;
+
+      this.textCoords[(index + 12 + 1) * 3    ] = (coordIndex + 1) / 12; //left corner
+      this.textCoords[(index + 12 + 1) * 3 + 1] = 0;
+      this.textCoords[(index + 12 + 1) * 3 + 2] = 0;
+
+      this.textCoords[(index + 12 + 25) * 3    ] = (coordIndex + 1) / 12;
+      this.textCoords[(index + 12 + 25) * 3 + 1] = 1; // bottom left
+      this.textCoords[(index + 12 + 25) * 3 + 2] = 0;
+    }
+}
+
   /**********************************************NORMALS**********************************************/
   this.normalCalculation = function normalCalculation(index, flipFlop){
     var normal = new Vector3();
@@ -314,6 +417,7 @@ var MeshObject = function(arraySize){
       this.normals[(index + 25) * 3    ] = normal.elements[0];
       this.normals[(index + 25) * 3 + 1] = normal.elements[1];
       this.normals[(index + 25) * 3 + 2] = normal.elements[2];
+
       this.numOfNormals+=4;
     }else {
       vec1.elements[0] = this.vertices[(index + 25 + 12)  * 3     ] - this.vertices[(index + 12) * 3      ];
@@ -346,6 +450,7 @@ var MeshObject = function(arraySize){
       this.normals[(index + 24 + 12 + 1) * 3    ] = normal.elements[0];
       this.normals[(index + 24 + 12 + 1) * 3 + 1] = normal.elements[1];
       this.normals[(index + 24 + 12 + 1) * 3 + 2] = normal.elements[2];
+
       this.numOfNormals+=4;
     }
   }
@@ -385,6 +490,7 @@ var MeshObject = function(arraySize){
     this.normals[this.numOfVertsC - 36    ] = (normal.elements[0]);
     this.normals[this.numOfVertsC - 36 + 1] = (normal.elements[1]);
     this.normals[this.numOfVertsC - 36 + 2] = (normal.elements[2]);
+
     this.numOfNormals+=4;
   }
   this.calculateSurfaceNormals = function calculateSurfaceNormals(vec1, normal, index,  flipFlop){
@@ -437,23 +543,28 @@ var MeshObject = function(arraySize){
 
       var diffuse = new Vector3();
       var spec    = new Vector3();
-
+      
       if(directionalLightBool){
         diffuse = this.dirDiffuse(diffuse, temp, normalL);
         spec    = this.dirSpec(spec, temp, globalPosNorm);
       }
-
+      
       var spec2 = new Vector3([0, 0, 0]);
       if(pointLight){
-        diffuse = this.pointDiffuse(diffuse, temp, i);
+        diffuse = this.pointDiffuse(diffuse, temp, i); // not doing anything
         spec2   = this.pointSpec(spec2, temp, globalPosNorm, i);
       }
 
       if(specToggle){
         var finalColor = new Vector3([0,0,0]);
-        finalColor.elements[0] = diffuse.elements[0];
-        finalColor.elements[1] = (spec.elements[1] + spec2.elements[1]) > 1 ? 1 : (spec.elements[1] + spec2.elements[1]);
-        finalColor.elements[2] = .2;
+        console.log(finalColor)
+        finalColor.elements[0] = (diffuse.elements[0] + spec.elements[0] + spec2.elements[0]);
+        finalColor.elements[1] = (diffuse.elements[1] + spec.elements[1] + spec2.elements[1]);
+        finalColor.elements[2] = (diffuse.elements[2] + spec.elements[2] + spec2.elements[2] + .2);
+
+        finalColor.elements[0] > 1 ? finalColor.elements[0] = 1 : finalColor.elements[0];
+        finalColor.elements[1] > 1 ? finalColor.elements[1] = 1 : finalColor.elements[1];
+        finalColor.elements[2] > 1 ? finalColor.elements[2] = 1 : finalColor.elements[2];
 
         this.colors[i]   = finalColor.elements[0];
         this.colors[i+1] = finalColor.elements[1];
@@ -461,51 +572,75 @@ var MeshObject = function(arraySize){
       }else{
         this.colors[i]   = diffuse.elements[0];
         this.colors[i+1] = diffuse.elements[1];
-        this.colors[i+2] = diffuse.elements[2] + .2;
+        this.colors[i+2] = diffuse.elements[2];
       }
     }
   }
   this.dirSpec = function dirSpec(spec, temp, globalPosNorm){
     var halfwayNormal = halfwayVector(globalPosNorm, lightDirection);
-    var light         = vector3Multiply(specularColor, lightColor);
-    var nDotH         = dotProduct(temp, halfwayNormal);
+    var light;
+    var nDotH = dotProduct(temp, halfwayNormal);
+
+    var bool = gl.getUniform(gl.program, usingTexture);
+    if(bool == false){
+      light = vector3Multiply(specularColor, lightColor);
+    }else{
+      light = lightColor;
+    }
 
     if(nDotH<0){
       nDotH = 0;
-      //console.log(nDotH);
     }
     spec.elements[0] = light.elements[0] * Math.pow(nDotH, gloss);
     spec.elements[1] = light.elements[1] * Math.pow(nDotH, gloss);
     spec.elements[2] = light.elements[2] * Math.pow(nDotH, gloss);
+
     return spec;
   }
   this.dirDiffuse = function dirDiffuse(diffuse, temp, normalL){
     var nDotL = temp.elements[0] * normalL.elements[0] + 
                 temp.elements[1] * normalL.elements[1] + 
                 temp.elements[2] * normalL.elements[2];
+
     if(nDotL<0){
       nDotL = 0;
     }
     nDotL = nDotL;
 
-    diffuse.elements[0] = lightColor.elements[0] * color.elements[0];
-    diffuse.elements[1] = lightColor.elements[1] * color.elements[1];
-    diffuse.elements[2] = lightColor.elements[2] * color.elements[2];
-
+    var bool = gl.getUniform(gl.program, usingTexture);
+    if(bool == false){
+      diffuse.elements[0] = lightColor.elements[0] * color.elements[0];
+      diffuse.elements[1] = lightColor.elements[1] * color.elements[1];
+      diffuse.elements[2] = lightColor.elements[2] * color.elements[2];
+    }else{
+      diffuse.elements[0] = lightColor.elements[0];
+      diffuse.elements[1] = lightColor.elements[1];
+      diffuse.elements[2] = lightColor.elements[2];
+    }
     diffuse.elements[0] = diffuse.elements[0] * nDotL;
     diffuse.elements[1] = diffuse.elements[1] * nDotL;
     diffuse.elements[2] = diffuse.elements[2] * nDotL;
-
     return diffuse;
   }
   this.pointSpec = function pointSpec(spec, temp, globalPosNorm, i){
     var normalizedPointDirection =new Vector3();
-    normalizedPointDirection.elements[0] = secondLightPosition.elements[0] - this.vertices[i    ];
-    normalizedPointDirection.elements[1] = secondLightPosition.elements[1] - this.vertices[i + 1];
-    normalizedPointDirection.elements[2] = secondLightPosition.elements[2] - this.vertices[i + 2];
+    var temp2 = new Vector3([this.vertices[i], this.vertices[i + 1], this.vertices[i + 2]]);
+    temp2 = this.modelMatrix.multiplyVector3(temp2);
+
+    normalizedPointDirection.elements[0] = secondLightPosition.elements[0] - temp2.elements[0];
+    normalizedPointDirection.elements[1] = secondLightPosition.elements[1] - temp2.elements[1];
+    normalizedPointDirection.elements[2] = secondLightPosition.elements[2] - temp2.elements[2];
 
     var halfwayNormal2 = halfwayVector(globalPosNorm, normalizedPointDirection);
-    var light2         = vector3Multiply(specularColor, secondLightColor);
+    var light2;
+
+    var bool = gl.getUniform(gl.program, usingTexture);
+    if(bool == false){
+      light2 = vector3Multiply(specularColor, secondLightColor);
+    }else{
+      light2 = secondLightColor;
+    }
+
     var nDotH2         = dotProduct(temp, halfwayNormal2);
     var spec2          = new Vector3();
 
@@ -516,27 +651,38 @@ var MeshObject = function(arraySize){
     spec2.elements[0] = light2.elements[0] * Math.pow(nDotH2,gloss);
     spec2.elements[1] = light2.elements[1] * Math.pow(nDotH2,gloss);
     spec2.elements[2] = light2.elements[2] * Math.pow(nDotH2,gloss);
+
     return spec2;
   }
   this.pointDiffuse = function pointDiffuse(diffuse, temp, i){
     var normalizedPointDirection =new Vector3();
-    normalizedPointDirection.elements[0] = secondLightPosition.elements[0] - this.vertices[i    ];
-    normalizedPointDirection.elements[1] = secondLightPosition.elements[1] - this.vertices[i + 1];
-    normalizedPointDirection.elements[2] = secondLightPosition.elements[2] - this.vertices[i + 2];
+    var temp2 = new Vector3([this.vertices[i], this.vertices[i + 1], this.vertices[i + 2]]);
+    temp2 = this.modelMatrix.multiplyVector3(temp2);
+
+    normalizedPointDirection.elements[0] = secondLightPosition.elements[0] - temp2.elements[0];
+    normalizedPointDirection.elements[1] = secondLightPosition.elements[1] - temp2.elements[1];
+    normalizedPointDirection.elements[2] = secondLightPosition.elements[2] - temp2.elements[2];
     normalizedPointDirection=normalizedPointDirection.normalize();
 
-    var nDotSL =temp.elements[0] * normalizedPointDirection.elements[0] + 
-                temp.elements[1] * normalizedPointDirection.elements[1] + 
-                temp.elements[2] * normalizedPointDirection.elements[2];
+    var nDotSL = temp.elements[0] * normalizedPointDirection.elements[0] + 
+                 temp.elements[1] * normalizedPointDirection.elements[1] + 
+                 temp.elements[2] * normalizedPointDirection.elements[2];
 
-    if(nDotSL<0){
-      nDotSL=0;
+    if(nDotSL < 0){
+      nDotSL = 0;
     }
-    var col = new Vector3();
-    col.elements[0] = secondLightColor.elements[0] * color.elements[0];
-    col.elements[1] = secondLightColor.elements[1] * color.elements[1];
-    col.elements[2] = secondLightColor.elements[2] * color.elements[2];
 
+    var col = new Vector3();
+    var bool = gl.getUniform(gl.program, usingTexture);
+    if(bool == false){
+      col.elements[0] = secondLightColor.elements[0] * color.elements[0];
+      col.elements[1] = secondLightColor.elements[1] * color.elements[1];
+      col.elements[2] = secondLightColor.elements[2] * color.elements[2];
+    }else{
+      col.elements[0] = secondLightColor.elements[0];
+      col.elements[1] = secondLightColor.elements[1];
+      col.elements[2] = secondLightColor.elements[2];
+    }
     diffuse.elements[0] += col.elements[0] * nDotSL;
     diffuse.elements[1] += col.elements[1] * nDotSL;
     diffuse.elements[2] += col.elements[2] * nDotSL;
@@ -628,7 +774,7 @@ var MeshObject = function(arraySize){
     gl.disableVertexAttribArray(a_Position);                //disable position
     gl.disableVertexAttribArray(a_Color);                   //disable color
     gl.disableVertexAttribArray(b_Position);                //disable lines position
-
+    gl.disableVertexAttribArray(a_TextCoord);               //text coords bb
     /**********************************************LINES**********************************************/
     //the attribute arrays need to be enabled when you draw
     //sets the uniform doIt to 1 so that it colors the lines properly
@@ -641,10 +787,19 @@ var MeshObject = function(arraySize){
     this.normalMatrix.setInverseOf(this.modelMatrix);
     this.normalMatrix.transpose();
 
-    if(!mode){
-      this.smoothShading();//recalculate the lighting
-    }else{
-      this.loading();
+    //only the selected object is updated?
+    if(this.isSelected){// recalculate the lighting for the current object
+      if(!mode){
+        this.smoothShading();
+      }else{
+        this.loading();
+      }
+    }else if(meshObject.isSelected == false){ // if nothing is selected then recalc everythings lighting
+      if(!mode){
+        this.smoothShading();
+      }else{
+        this.loading();
+      }
     }
 
     if(numOfVerts>0){
@@ -665,6 +820,9 @@ var MeshObject = function(arraySize){
       gl.uniformMatrix4fv(u_MvpMatrix, false, (mvpMatrix.multiply(this.modelMatrix)).elements);
     }
 
+    gl.enableVertexAttribArray(a_TextCoord);
+    gl.bindBuffer(gl.ARRAY_BUFFER, textCoordBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.textCoords, gl.STATIC_DRAW);
 
     /**********************************************OBJECT**********************************************/
     //sets the uniform doIt to 0 so that it colors the object properly
@@ -692,11 +850,12 @@ var MeshObject = function(arraySize){
 
     gl.uniform1i(selected,0);
     if(perspectiveBool){
-      mvpMatrix.setOrtho(-1, 1,-1, 1,-1, 1);
+      mvpMatrix.setOrtho(-1 + camOffBro.elements[0], 1 + camOffBro.elements[0],-1 + camOffBro.elements[1], 1 + camOffBro.elements[1], -1 + camOffBro.elements[2], 1 + camOffBro.elements[2]);
     }else{
-      mvpMatrix.setPerspective(30, 1, 1, 100);
-      mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
+      mvpMatrix.setPerspective(zoomValue, 1, 1, 100);
+      mvpMatrix.lookAt(globalPos.elements[0] + camOffBro.elements[0], globalPos.elements[1] + camOffBro.elements[1], globalPos.elements[2] + camOffBro.elements[2], camOffBro.elements[0], camOffBro.elements[1], camOffBro.elements[2], 0, 1, 0);
     }
+    gl.disableVertexAttribArray(a_TextCoord);
     /**********************************************NORMALS**********************************************/
     //displayN determines whether or not the normals button has been pressed in the html file
     if(displayN){
@@ -790,6 +949,8 @@ var cubeIndices         = new Uint16Array(5000); //the indicies of the point lig
 var dirVert             = new Float32Array(100); //the verticies of the directional lights rect
 var dirIndices          = new Uint16Array(2);    //the indicies of the directional lights rect
 var lineVert            = new Float32Array(5000);//the verticies of the line thats rubberbanding
+
+var camOffBro = new Vector3();
 //buffers
 var vertexBuffer;
 var indexBuffer;
@@ -797,6 +958,10 @@ var lineBuffer;
 var colorBuffer;
 var normalBuffer;
 //attribute/uniforms
+var a_TextCoord;
+var textCoordBuffer;
+var u_Sampler;
+
 var a_Position;
 var a_Color;
 var b_Position;
@@ -822,7 +987,7 @@ var mvpMatrix;
 var slider;
 var radiusSlider;
 var mode=true;
-var specToggle=true;
+var specToggle=false;
 var angle=10;
 var globalPos=new Vector3([0,0,5]);
 var directionalLightBool=true;
@@ -832,6 +997,32 @@ var holdingClick = false;
 var leftClick = false;
 var middleMouse = false;
 var mousePos = new Vector3();
+var zoomValue = 30;
+var usingTexture;
+
+
+function toggleTexture(){
+  if(gl.getUniform(gl.program, usingTexture)){
+    gl.uniform1i(usingTexture,0);//true so t displays
+  }else{
+    gl.uniform1i(usingTexture,1);//true so t displays
+
+  }
+  allBuffers();
+}
+//loads a texture
+function loadTexture(texture,image) {
+  // Enable texture unit0
+  gl.activeTexture(gl.TEXTURE0);
+  // Bind the texture object to the target
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  // Set the texture parameters
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  // Set the texture image
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
+}
+
+
 /**********************************************MAIN**********************************************/
 //the main functions runs on the program starting and handles initialization and other things.
 function main() {
@@ -857,7 +1048,6 @@ function main() {
     if(!enableMove){
       if(ev.button==2){
         holdingClick = true;
-        console.log("right");
         var x = ev.clientX;
         var y = ev.clientY; 
         var a;
@@ -869,7 +1059,6 @@ function main() {
         mousePos.elements[0] = x;
         mousePos.elements[1] = y;
       }else if(ev.button==0){
-        console.log("left");
         leftClick=true;
         var x = ev.clientX;
         var y = ev.clientY; 
@@ -893,19 +1082,19 @@ function main() {
         mousePos.elements[0] = x;
         mousePos.elements[1] = y;
         middleMouse = true;
-        console.log("MIDDLE");
       }
     }
   };
   canvas.onmousemove = function(ev){
     hover(ev,gl,canvas,a_Position);
     if(!enableMove){
+      meshObject.calculateOrigin();
       if(holdingClick){
         rotationInput(ev);
       }
-      if(leftClick){
-        translateInput(ev);
-      }
+      // this is fine
+      leftClick ? meshObject.isSelected ? translateInput(ev) : translateCamera(ev) : x = 0;
+
       if(middleMouse){
         translateZ(ev);
       }
@@ -915,30 +1104,43 @@ function main() {
     if(!enableMove){
       if(ev.button==2){
         holdingClick = false;
-        console.log("clicked")
       }else if(ev.button==0){
-        console.log("clicked baby");
         leftClick = false;
       }else if(ev.button == 1){
         middleMouse = false;
-        console.log("MIDDLE");
       }
     }
   };
   canvas.onmousewheel = function(ev){
-     ev.preventDefault();
-    if(!enableMove){
-      var wheelAmount = ev.deltaY;
-      var temp;
-      if(wheelAmount>0){
+    ev.preventDefault();
+    var wheelAmount = ev.deltaY;
+    var temp;
+    if(wheelAmount>0){
+      temp=(.99);
+    }else if(wheelAmount<0){
         temp=(1.01);
-      }else if(wheelAmount<0){
-        temp=(.99);
-      }
+    }
+    if(meshObject.isSelected == true){
+      if(!enableMove){
+        if(wheelAmount!=0){
+          meshObject.scaleAmount = temp;
+          meshObject.scaleModelMatrix(meshObject.scaleAmount,meshObject.scaleAmount,meshObject.scaleAmount);
+          allBuffers();
+        }
+      }   
+    }else{
+      //scroll the cameras fov
       if(wheelAmount!=0){
-        meshObject.scaleAmount = temp;
-        meshObject.scaleModelMatrix(meshObject.scaleAmount,meshObject.scaleAmount,meshObject.scaleAmount);
-        allBuffers();
+        if(!perspectiveBool){
+          zoomValue = zoomValue * temp;
+          mvpMatrix.setPerspective(zoomValue, 1, 1, 100);
+          mvpMatrix.lookAt(globalPos.elements[0] + camOffBro.elements[0], globalPos.elements[1] + camOffBro.elements[1], globalPos.elements[2] + camOffBro.elements[2], camOffBro.elements[0], camOffBro.elements[1], camOffBro.elements[2], 0, 1, 0);
+          gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
+
+          allBuffers();
+        }
+        middleMouse ? translateCameraZ(ev) : x = 0;
+        
       }
     }
   }
@@ -955,10 +1157,46 @@ function translateInput(ev){
   x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
   y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
 
-  meshObject.translateModelMatrix(x - mousePos.elements[0], y - mousePos.elements[1], 0);  
-  allBuffers();
+  meshObject.translateModelMatrix(x - mousePos.elements[0], y - mousePos.elements[1], 0);
+
+  allBuffers(); // should update the lighting on the object while its moving
+
   mousePos.elements[0] = x;
   mousePos.elements[1] = y;
+}
+function translateCamera(ev){
+  var x = ev.clientX;
+  var y = ev.clientY; 
+  var a;
+  var rect = ev.target.getBoundingClientRect() ;
+
+  x = ((x - rect.left) - canvas.width / 2) / (canvas.width / 2);
+  y = (canvas.height / 2 - (y - rect.top)) / (canvas.height / 2);
+
+  //meshObject.translateModelMatrix(x - mousePos.elements[0], y - mousePos.elements[1], 0);
+  mvpMatrix.setPerspective(zoomValue, 1, 1, 100);
+
+  camOffBro.elements[0] -= x - mousePos.elements[0];
+  camOffBro.elements[1] -= y - mousePos.elements[1];
+
+  perspectiveBool ?  mvpMatrix.setOrtho(-1 + camOffBro.elements[0], 1 + camOffBro.elements[0],-1 + camOffBro.elements[1], 1 + camOffBro.elements[1], -1 + camOffBro.elements[2], 1 + camOffBro.elements[2]) : mvpMatrix.lookAt(globalPos.elements[0] + camOffBro.elements[0], globalPos.elements[1] + camOffBro.elements[1], globalPos.elements[2] + camOffBro.elements[2], camOffBro.elements[0], camOffBro.elements[1], camOffBro.elements[2], 0, 1, 0);
+  gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
+  
+  allBuffers();
+
+  mousePos.elements[0] = x;
+  mousePos.elements[1] = y;
+}
+function translateCameraZ(ev){
+  mvpMatrix.setPerspective(zoomValue, 1, 1, 100);
+
+  camOffBro.elements[2] += ev.deltaY * .001;
+
+  perspectiveBool ?  mvpMatrix.setOrtho(-1 + camOffBro.elements[0], 1 + camOffBro.elements[0],-1 + camOffBro.elements[1], 1 + camOffBro.elements[1], -1 + camOffBro.elements[2], 1 + camOffBro.elements[2]) : mvpMatrix.lookAt(globalPos.elements[0] + camOffBro.elements[0], globalPos.elements[1] + camOffBro.elements[1], globalPos.elements[2] + camOffBro.elements[2], camOffBro.elements[0], camOffBro.elements[1], camOffBro.elements[2], 0, 1, 0);
+
+  gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
+  
+  allBuffers();
 }
 function translateZ(ev){
   var x = ev.clientX;
@@ -1002,8 +1240,8 @@ function inputHandling(){
       var mat = new Matrix4();
       mat.setRotate(angle, 0, 1, 0);
       globalPos = mat.multiplyVector3(globalPos);
-      mvpMatrix.setPerspective(30, 1, 1, 100);
-      mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
+      mvpMatrix.setPerspective(zoomValue, 1, 1, 100);
+      mvpMatrix.lookAt(globalPos.elements[0] + camOffBro.elements[0], globalPos.elements[1] + camOffBro.elements[1], globalPos.elements[2] + camOffBro.elements[2], camOffBro.elements[0], camOffBro.elements[1], camOffBro.elements[2], 0, 1, 0);
       gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
       allBuffers();
       //redraw the entire screen
@@ -1013,8 +1251,8 @@ function inputHandling(){
       var mat = new Matrix4();
       mat.setRotate(-angle, 0, 1, 0);
       globalPos=mat.multiplyVector3(globalPos);
-      mvpMatrix.setPerspective(30, 1, 1, 100);
-      mvpMatrix.lookAt(globalPos.elements[0], globalPos.elements[1], globalPos.elements[2], 0, 0, 0, 0, 1, 0);
+      mvpMatrix.setPerspective(zoomValue, 1, 1, 100);
+      mvpMatrix.lookAt(globalPos.elements[0] + camOffBro.elements[0], globalPos.elements[1] + camOffBro.elements[1], globalPos.elements[2] + camOffBro.elements[2], camOffBro.elements[0], camOffBro.elements[1], camOffBro.elements[2], 0, 1, 0);
       gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
       allBuffers();
       //redraw the entire screen
@@ -1123,7 +1361,7 @@ function initBuffers(gl) {
   colorBuffer       = gl.createBuffer();//the buffer for colors
   normalBuffer      = gl.createBuffer();//the buffer for normals
   directionalBuffer = gl.createBuffer();//the buffer for directionals
-
+  textCoordBuffer   = gl.createBuffer();
   var FSIZE = object.BYTES_PER_ELEMENT;
 
   gl.bindBuffer(gl.ARRAY_BUFFER, lineBuffer);
@@ -1165,6 +1403,15 @@ function initBuffers(gl) {
 
   gl.vertexAttribPointer(surfaceNormal_Position, 3, gl.FLOAT, false, FSIZE * 3, 0);
   gl.enableVertexAttribArray(surfaceNormal_Position);
+//textCOORSJGUISDHG
+  a_TextCoord = gl.getAttribLocation(gl.program, 'a_TextCoord');
+  if(a_TextCoord < 0) {
+    console.log('Failed to get the storage location of surfaceNormal_Position');
+    return -1;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, textCoordBuffer);
+  gl.vertexAttribPointer(a_TextCoord, 3, gl.FLOAT, false, FSIZE * 3, 0);
+  gl.enableVertexAttribArray(a_TextCoord);
 
   gl.bindBuffer(gl.ARRAY_BUFFER,directionalBuffer);
   directionalLight_Position = gl.getAttribLocation(gl.program, 'directionalLight_Position');
@@ -1181,6 +1428,23 @@ function initBuffers(gl) {
 
   pointBool = gl.getUniformLocation(gl.program, 'point');
   gl.uniform1i(pointBool,1);
+
+  usingTexture = gl.getUniformLocation(gl.program, 'usingTexture');
+  gl.uniform1i(usingTexture,0);//true so t displays
+//Textures
+  u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler');
+  gl.uniform1i(u_Sampler,0);
+  //creates a texture
+  var texture = gl.createTexture();
+  //creates an image
+  var image = new Image();
+  //set the images onload
+  image.onload = function(){
+    loadTexture(texture, image);
+  }
+  //get the source
+  image.src = "sky.jpg";
+//do it
 
   directionalBool = gl.getUniformLocation(gl.program, 'directional');
   gl.uniform1i(directionalBool,1);
@@ -1210,18 +1474,18 @@ function initBuffers(gl) {
   gl.enable(gl.DEPTH_TEST);
 
   mvpMatrix = new Matrix4();
-  mvpMatrix.setOrtho(-1, 1,-1, 1,-1, 1);
+mvpMatrix.setOrtho(-1 + camOffBro.elements[0], 1 + camOffBro.elements[0],-1 + camOffBro.elements[1], 1 + camOffBro.elements[1], -1 + camOffBro.elements[2], 1 + camOffBro.elements[2]);
   gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
 }
 /**********************************************BOOLEANS**********************************************/
 function swapPersp(){
   if(!perspectiveBool)
   {
-    mvpMatrix.setOrtho(-1, 1,-1, 1,-1, 1);
+mvpMatrix.setOrtho(-1 + camOffBro.elements[0], 1 + camOffBro.elements[0],-1 + camOffBro.elements[1], 1 + camOffBro.elements[1], -1 + camOffBro.elements[2], 1 + camOffBro.elements[2]);
     perspectiveBool=true;
   }else{
-    mvpMatrix.setPerspective(30, 1, 1, 100);
-    mvpMatrix.lookAt(0, 0, 5, 0, 0, 0, 0, 1, 0);
+    mvpMatrix.setPerspective(zoomValue, 1, 1, 100);
+    mvpMatrix.lookAt(globalPos.elements[0] + camOffBro.elements[0], globalPos.elements[1] + camOffBro.elements[1], globalPos.elements[2] + camOffBro.elements[2], camOffBro.elements[0], camOffBro.elements[1], camOffBro.elements[2], 0, 1, 0);
     perspectiveBool=false;
   }
   gl.uniformMatrix4fv(u_MvpMatrix, false, mvpMatrix.elements);
@@ -1324,8 +1588,8 @@ function changeBackground(){
          Math.floor(Math.random()*100)/100);
   allBuffers();
 }
+// goes through every object and its own individual bufferHandl
 function displayAll(){
-
   for(var i=0;i<objectList.length;i++){
     objectList[i].bufferHandling();
   }
@@ -1372,7 +1636,7 @@ function click(ev, gl, canvas, a_Position) {
       lineVert[numOfVerts - 2]= y;
       lineVert[numOfVerts - 1]= z;
     }else if(ev.button==2){
-      currentlyDrawing=false;
+      currentlyDrawing = false;
       //enableMove=false;
       numOfVerts+=3;
 
@@ -1392,10 +1656,12 @@ function click(ev, gl, canvas, a_Position) {
     checkObject(ev);//if enableMove is false and you click check the object else draw
   }
 }
+
 function toggleDraw(){
   enableMove ? enableMove = false : enableMove = true;
   enableMove ? document.getElementById("curr").innerHTML="Current = Draw" : document.getElementById("curr").innerHTML="Current = Transform";
 }
+
 function checkAlphaKeys(key){
   for (var i = 0; i < objectList.length; i++) {
     if(objectList[i].alphaKey==key){//goes through every object and checks its alpha for the one recieved
@@ -1425,38 +1691,50 @@ function checkObject(ev){
   //draw it to the screen
   var pixels = new Uint8Array(4); // Array for storing the pixel value
   gl.readPixels(x_in_canvas, y_in_canvas, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-  if (pixels[0] == 255){//checks if the pixel is red where you clicked
-    //check every alpha key
-    if(checkAlphaKeys(pixels[3])){
-      meshObject = objectList[getMeshObject(pixels[3])];//doesnt work
-      newSelected(getMeshObject(pixels[3]));
-    }else{
-      //no object matched
-      console.log("no match");
-    }
+  console.log(pixels);
+  //check every alpha key
+  if(checkAlphaKeys(pixels[3])){
+    meshObject = objectList[getMeshObject(pixels[3])];//doesnt work
+    newSelected(getMeshObject(pixels[3]));
+  }else{
+    //no object matched
     if(pixels[3]==153){//checks if you clicked the directionalLight
+      //if you click a light then there is not selected objet
+      meshObject.isSelected = false;
+      meshObject = new MeshObject(5000);
+      meshObject.isSelected = false;
+
       if(directionalLightBool){
-        directionalLightBool=false;
+        directionalLightBool = false;
         gl.uniform1i(directionalBool,0);
       }else{
-        directionalLightBool=true;
+        directionalLightBool = true;
         gl.uniform1i(directionalBool,1);
       }
+      console.log("DIRECTIONALLIGHT" + ", " + directionalLightBool);
     }else if(pixels[3]==128){//checks if you cicked the pointlight
+      meshObject.isSelected = false;
+      meshObject = new MeshObject(5000);
+      meshObject.isSelected = false;
+
       if(pointLight){
-        pointLight=false;
+        pointLight = false;
         gl.uniform1i(pointBool,0);
       }else{
-        pointLight=true;
+        pointLight = true;
         gl.uniform1i(pointBool,1);
       }
+      console.log("POINTLIGHT" + ", " + pointLight);
     } 
-  }else{
-    console.log("not there");
+  }
+
+  
+  //clicked the background
+  if(pixels[3] == 255){
     //deselect any object
-    meshObject.isSelected=false;
-    meshObject=new MeshObject(5000);
-    meshObject.isSelected=false;
+    meshObject.isSelected = false;
+    meshObject = new MeshObject(5000);
+    meshObject.isSelected = false;
 
   }
 
@@ -1505,8 +1783,28 @@ function saveSOR(){
 
   saveFile(new SOR(p, meshObject.vertices, meshObject.indices));
 }
-//todo
-//multiple gcs not drawing
-//loading in new gc's
-//possibly loading the matrix for that gc's position
-//make the transformations off mouse input
+function picPls(){
+  var input = document.getElementById("picName").value;
+
+  for (var i = input.length - 1; i >= 0; i--) {
+    if(input[i] == "\\" || input[i] == "/"){
+      input = input.substring(i + 1, input.length);
+      break;
+    }
+  }
+  console.log(input);
+  var texture = gl.createTexture();
+  //creates an image
+  var image = new Image();
+  //set the images onload
+  image.onload = function(){
+    loadTexture(texture, image);
+    allBuffers();
+  }
+  //get the source
+  image.src = input;
+
+}
+// PROBLEMS
+// fov slide changes 1 object and resets after clicking another
+//double ternary

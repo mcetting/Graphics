@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head>
     <meta charset="utf-8">
-    <title>Prog3</title>
+    <title>prog4</title>
     <link rel="stylesheet" href="driver.css">
   </head>
   <body onload="main()">
@@ -16,7 +16,7 @@
         Please use a browser that supports "canvas"
         </canvas>
         <div id = "inputArea">
-            <p style="text-align: center;">Prog3 - Michael Ettinger</p>
+            <p style="text-align: center;">prog4 - Michael Ettinger</p>
             <div id = "input" align="center">
                 <!--input field for file saving and loading as well as antything else-->
                 <h1>File Input/Output</h1>
@@ -39,7 +39,9 @@
                 <input class="slider" type="range" name="inputRange" step = ".01" min=".01" max=".2" value=".01" id="radiusSlider">
                 <p id = "curr">Current = Draw</p>
                 <button class = "button" onclick="toggleDraw()" style="margin-bottom: 10px;">Draw/Transform</button>
-
+                <button class = "button" onclick="toggleTexture()" style="margin-bottom: 10px;">Toggle Texture</button>
+                <br>
+                <input type = "file" id = "picName" onchange = "picPls()">
             </div>
         </div>
     </div>
